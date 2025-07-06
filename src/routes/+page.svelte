@@ -13,11 +13,11 @@
     power: string;
   }
 
-  let pending = $state<Promise<void>>();
+  let pending = $state(true);
   let devices = new SvelteMap<string, DeviceUpdatePayload>();
 
   onMount(async () => {
-    pending = invoke("discover");
+    void discover();
     void listen<DeviceUpdatePayload>("device-update", ({ payload }) => {
       devices.set(payload.id, {
         ...payload,
@@ -25,6 +25,12 @@
       });
     });
   });
+
+  function discover() {
+    devices.clear();
+    pending = true;
+    invoke("discover").then(() => (pending = false));
+  }
 
   function createOnclick(id: string, power: string): () => void {
     return function onclick() {
@@ -49,8 +55,15 @@
   }
 </script>
 
-<main>
-  <ul class="p-4 flex flex-col gap-4">
+<main class="p-4 space-y-4">
+  <button
+    class="px-4 py-2 bg-blue-900 b-(1 blue-950) rounded disabled:(b-black bg-neutral-900 cursor-not-allowed)"
+    onclick={() => discover()}
+    disabled={pending || undefined}
+  >
+    Refresh
+  </button>
+  <ul class="flex flex-col gap-4">
     {#each devices.entries() as [id, { name, power }]}
       {@const action = getAction(power)}
       <li class="p-4 b-(1 black) bg-neutral-800 rounded space-y-2">
@@ -70,17 +83,15 @@
         </button>
       </li>
     {/each}
-    {#await pending}
+    {#if pending}
       <li class="p-4 b-(1 black) bg-neutral-800 rounded space-y-2">
         Scanning for lighthouses...
       </li>
-    {:then}
-      {#if devices.size === 0}
-        <li class="p-4 b-(1 black) bg-neutral-800 rounded space-y-2">
-          No lighthouses found!
-        </li>
-      {/if}
-    {/await}
+    {:else if devices.size === 0}
+      <li class="p-4 b-(1 black) bg-neutral-800 rounded space-y-2">
+        No lighthouses found!
+      </li>
+    {/if}
   </ul>
 </main>
 

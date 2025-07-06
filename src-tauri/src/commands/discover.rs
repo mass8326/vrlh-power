@@ -15,7 +15,7 @@ pub async fn discover(app: AppHandle) -> crate::Result<()> {
     let adapter = get_default_adapter().await?;
     let events = adapter.events().await?;
     adapter.start_scan(ScanFilter::default()).await?;
-    let mut limited = events.take_until(Box::pin(sleep(Duration::from_secs(10))));
+    let mut limited = events.take_until(Box::pin(sleep(Duration::from_secs(15))));
 
     DEVICE_MAP.lock().await.clear();
     while let Some(evt) = limited.next().await {
