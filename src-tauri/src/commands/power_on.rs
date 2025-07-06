@@ -47,7 +47,7 @@ pub async fn power_on(app: AppHandle, id: PeripheralId) -> crate::Result<()> {
             },
         )?;
         match power {
-            DevicePowerStatus::PowerOn | DevicePowerStatus::Unknown(_) => break,
+            DevicePowerStatus::PoweredOn | DevicePowerStatus::Unknown(_) => break,
             _ => continue,
         };
     }

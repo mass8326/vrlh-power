@@ -11,11 +11,12 @@ use crate::dto::{DevicePowerStatus, DeviceUpdatePayload};
 use crate::util::{get_default_adapter, get_power_characteristic};
 
 #[tauri::command(async)]
-pub async fn discover(app: AppHandle) -> crate::Result<()> {
+pub async fn discover(app: AppHandle, duration: u64) -> crate::Result<()> {
     let adapter = get_default_adapter().await?;
     let events = adapter.events().await?;
     adapter.start_scan(ScanFilter::default()).await?;
-    let mut limited = events.take_until(Box::pin(sleep(Duration::from_secs(15))));
+    let timer = Box::pin(sleep(Duration::from_secs(duration)));
+    let mut limited = events.take_until(timer);
 
     DEVICE_MAP.lock().await.clear();
     while let Some(evt) = limited.next().await {

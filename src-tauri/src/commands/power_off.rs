@@ -39,7 +39,7 @@ pub async fn power_off(app: AppHandle, id: PeripheralId) -> crate::Result<()> {
         DeviceUpdatePayload {
             id: &id,
             name: None,
-            power: &DevicePowerStatus::PowerOff,
+            power: &DevicePowerStatus::PoweredOff,
         },
     )?;
 
