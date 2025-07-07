@@ -4,7 +4,10 @@ use serde::{ser::SerializeStruct, Serialize, Serializer};
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceUpdatePayload<'a> {
+    /// Serializes differently per platform
     pub id: &'a PeripheralId,
+    /// Should be consistent across platforms
+    pub addr: &'a str,
     pub name: Option<&'a str>,
     pub power: &'a DevicePowerStatus,
 }

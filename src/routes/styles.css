@@ -1,0 +1,7 @@
+:root {
+  --at-apply: h-full text-white bg-neutral-700;
+}
+
+body {
+  --at-apply: h-full;
+}

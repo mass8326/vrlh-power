@@ -60,6 +60,7 @@ async fn process_device(app: AppHandle, adapter: Adapter, id: PeripheralId) -> c
         "device-update",
         DeviceUpdatePayload {
             id: &id,
+            addr: &device.address().to_string(),
             name: Some(&name),
             power: &DevicePowerStatus::Loading,
         },
@@ -68,6 +69,7 @@ async fn process_device(app: AppHandle, adapter: Adapter, id: PeripheralId) -> c
         "device-update",
         DeviceUpdatePayload {
             id: &id,
+            addr: &device.address().to_string(),
             name: Some(&name),
             power: &get_device_status(&device).await?,
         },

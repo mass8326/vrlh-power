@@ -1,7 +1,4 @@
 <script lang="ts">
-  import "uno.css";
-  import "@unocss/reset/tailwind.css";
-
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
@@ -18,7 +15,10 @@
     | "POWER_UNKNOWN";
 
   interface DeviceUpdatePayload {
-    id: string;
+    /** Serializes differently per platorm */
+    id: unknown;
+    /** Should be consistent across platorms */
+    addr: string;
     name: string | null;
     power: { code: DevicePowerCode; detail: string | null };
   }
@@ -29,10 +29,9 @@
   onMount(async () => {
     void discover();
     void listen<DeviceUpdatePayload>("device-update", ({ payload }) => {
-      devices.set(payload.id, {
-        ...payload,
-        name: payload.name ?? devices.get(payload.id)?.name ?? "[Unavailable]",
-      });
+      const name =
+        payload.name ?? devices.get(payload.addr)?.name ?? "[Unavailable]";
+      devices.set(payload.addr, { ...payload, name });
     });
   });
 
@@ -43,7 +42,7 @@
     pending = false;
   }
 
-  function createOnclick(id: string, power: DevicePowerCode): () => void {
+  function createOnclick(id: unknown, power: DevicePowerCode): () => void {
     return function onclick() {
       switch (power) {
         case "POWERED_ON":
@@ -75,66 +74,63 @@
   }
 </script>
 
-<main class="p-4 space-y-4">
-  <div class="flex gap-4 items-center">
-    <button
-      class={[
-        "px-4 py-2 bg-blue-900 b-(1 blue-950) rounded font-bold transition-colors",
-        "hover:(bg-blue-700 b-blue-800)",
-        "disabled:(b-black bg-neutral-900 cursor-not-allowed)",
-      ]}
-      onclick={() => discover(30)}
-      disabled={pending || undefined}
-    >
-      Refresh
-    </button>
-    <div class="font-italic">
-      {#if pending}
-        Scanning for lighthouses...
-      {:else}
-        Done!
-      {/if}
-    </div>
-  </div>
-  <ul class="flex flex-col gap-4">
-    {#each devices.entries() as [id, { name, power }]}
-      {@const action = getAction(power.code)}
-      {@const colors = getColors(power.code)}
-      <li
-        class="p-4 flex justify-between b-(1 black) bg-neutral-800 rounded font-mono"
+<div class="h-full flex flex-col justify-between">
+  <main class="p-4 space-y-4">
+    <div class="flex gap-4 items-center">
+      <button
+        class={[
+          "px-4 py-2 bg-blue-900 b-(1 blue-950) rounded font-bold transition-colors",
+          "hover:(bg-blue-700 b-blue-800)",
+          "disabled:(b-black bg-neutral-900 cursor-not-allowed)",
+        ]}
+        onclick={() => discover(30)}
+        disabled={pending || undefined}
       >
-        <div>
-          <h3 class="text-3xl font-bold">{name}</h3>
-          <div class="font-italic">{id}</div>
-          <div>
-            {power.code}
-            {#if power.detail}({JSON.stringify(power.detail)}){/if}
-          </div>
-        </div>
-        <button
-          class={[
-            "px-4 py-2 b-1 rounded transition-colors",
-            "disabled:(b-black bg-neutral-900 cursor-not-allowed)",
-            colors,
-          ]}
-          disabled={colors ? undefined : true}
-          onclick={createOnclick(id, power.code)}
-          title={action}
+        Refresh
+      </button>
+    </div>
+    <ul class="flex flex-col gap-4">
+      {#each devices.values() as { addr, id, name, power }}
+        {@const action = getAction(power.code)}
+        {@const colors = getColors(power.code)}
+        <li
+          class="p-4 flex justify-between b-(1 black) bg-neutral-800 rounded font-mono"
         >
-          {@html toggle}
-        </button>
-      </li>
-    {/each}
-    {#if !pending && devices.size === 0}
-      <li class="p-4 b-(1 black) bg-neutral-800 rounded space-y-2">
-        No lighthouses found!
-      </li>
+          <div>
+            <h3 class="text-3xl font-bold" title={addr}>
+              {name}
+            </h3>
+            <div class="font-italic">
+              {power.code}
+              {#if power.detail}({JSON.stringify(power.detail)}){/if}
+            </div>
+          </div>
+          <button
+            class={[
+              "px-4 py-2 b-1 rounded transition-colors",
+              "disabled:(b-black bg-neutral-900 cursor-not-allowed)",
+              colors,
+            ]}
+            disabled={colors ? undefined : true}
+            onclick={createOnclick(id, power.code)}
+            title={action}
+          >
+            {@html toggle}
+          </button>
+        </li>
+      {/each}
+      {#if !pending && devices.size === 0}
+        <li class="p-4 b-(1 black) bg-neutral-800 rounded space-y-2">
+          No lighthouses found!
+        </li>
+      {/if}
+    </ul>
+  </main>
+  <footer class="px-4 py-1 bg-neutral-800 b-t-(1 black) font-italic">
+    {#if pending}
+      Scanning for lighthouses...
+    {:else}
+      Done scanning!
     {/if}
-  </ul>
-</main>
-
-<style>
-  :root {
-    --at-apply: text-white bg-neutral-700;
-  }
-</style>
+  </footer>
+</div>
