@@ -1,11 +1,11 @@
 {
-  "name": "vrlh-power",
+  "name": "vrlh-power-manager",
   "version": "0.1.0",
-  "description": "",
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
+    "dev": "tauri dev",
+    "build": "tauri build --no-bundle",
+    "bundle": "tauri bundle",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
