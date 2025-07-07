@@ -7,7 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 use btleplug::platform::{Adapter, Peripheral, PeripheralId};
 use tokio::sync::Mutex;
 
-use crate::get_default_adapter;
+use crate::{device::Device, get_default_adapter};
 
 pub use create_discovery_stream::CreateDiscoveryStream;
 pub use power_off::PowerOff;
@@ -15,7 +15,7 @@ pub use power_on::PowerOn;
 
 #[derive(Clone, Debug, Default)]
 pub struct DeviceList {
-    pub map: Arc<Mutex<HashMap<PeripheralId, Peripheral>>>,
+    pub map: Arc<Mutex<HashMap<PeripheralId, Device>>>,
     pub adapter: Option<Adapter>,
 }
 

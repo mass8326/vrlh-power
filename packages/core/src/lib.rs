@@ -1,4 +1,5 @@
 mod constants;
+mod device;
 mod device_list;
 mod dto;
 mod error;

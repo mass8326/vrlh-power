@@ -7,6 +7,7 @@ use futures::{Stream, StreamExt};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::sleep;
 
+use crate::device::Device;
 use crate::dto::{DevicePowerStatus, DeviceUpdatePayload};
 use crate::util::assert_power_characteristic;
 
@@ -76,7 +77,10 @@ async fn handle_dicovered_device(
         return Ok(());
     };
 
-    list.map.lock().await.insert(id.clone(), device.clone());
+    list.map
+        .lock()
+        .await
+        .insert(id.clone(), Device::new(device.clone()));
     tx.send(DeviceUpdatePayload {
         id: id.clone(),
         addr: device.address().to_string(),
