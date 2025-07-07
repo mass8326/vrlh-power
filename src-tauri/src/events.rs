@@ -7,7 +7,7 @@ struct StatusPayload(String);
 
 impl StatusPayload {
     pub fn new(msg: String) -> Self {
-        return Self(msg);
+        Self(msg)
     }
 }
 

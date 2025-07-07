@@ -1,13 +1,13 @@
 <script lang="ts">
-  import * as remeda from "remeda";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
+  import * as remeda from "remeda";
   import { onMount } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
-  import toggleSvg from "$lib/icons/power.svg?raw";
-  import loadingSvg from "$lib/icons/loading.svg?raw";
-  import { status } from "$lib/status.svelte";
   import { slide } from "svelte/transition";
+  import loadingSvg from "$lib/icons/loading.svg?raw";
+  import toggleSvg from "$lib/icons/power.svg?raw";
+  import { status } from "$lib/status.svelte";
 
   type DevicePowerCode =
     | "LOADING"
@@ -28,16 +28,20 @@
   }
 
   let pending = $state(true);
-  let powering = new SvelteSet<string>();
-  let devices = new SvelteMap<string, DeviceUpdatePayload>();
+  const powering = new SvelteSet<string>();
+  const devices = new SvelteMap<string, DeviceUpdatePayload>();
 
-  onMount(async () => {
+  onMount(() => {
+    const cleanup: (() => void)[] = [];
     void discover();
     void listen<DeviceUpdatePayload>("device-update", ({ payload }) => {
       const existing = devices.get(payload.addr);
       if (!existing) status.push(`Discovered "${payload.name}"`);
       devices.set(payload.addr, payload);
-    });
+    }).then((unlisten) => cleanup.push(unlisten));
+    return () => {
+      for (const fn of cleanup) fn();
+    };
   });
 
   async function discover(seconds?: number) {
@@ -63,7 +67,7 @@
       if (!command) return;
       powering.add(device.addr);
       invoke(command, { id })
-        .catch((err) => {
+        .catch((err: unknown) => {
           status.push(JSON.stringify(err));
         })
         .finally(() => {

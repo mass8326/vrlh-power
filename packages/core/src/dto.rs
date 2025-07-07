@@ -66,7 +66,7 @@ impl From<Vec<u8>> for DevicePowerStatus {
         if value.len() != 1 {
             return Self::Unknown(value);
         };
-        match value[0] {
+        match value.first().unwrap() {
             0 => Self::PoweredOff,
             1 => Self::PowerInitiated,
             8 => Self::PowerAcknowledged,

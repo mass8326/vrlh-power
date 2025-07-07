@@ -87,7 +87,7 @@ impl Device {
 
     pub async fn ensure_connected(&self) -> crate::Result<()> {
         if !self.peripheral.is_connected().await? {
-            self.peripheral.connect().await?
+            self.peripheral.connect().await?;
         };
         Ok(())
     }
@@ -118,15 +118,13 @@ impl Device {
             .peripheral
             .services()
             .into_iter()
-            .filter(|service| service.uuid == LHV2_GATT_POWER_SERVICE)
-            .next()
+            .find(|service| service.uuid == LHV2_GATT_POWER_SERVICE)
             .ok_or(crate::Error::Vrlh("Could not verify power service!"))
             .and_then(|service| {
                 service
                     .characteristics
                     .into_iter()
-                    .filter(|char| char.uuid == LHV2_GATT_POWER_CHARACTERISTIC)
-                    .next()
+                    .find(|char| char.uuid == LHV2_GATT_POWER_CHARACTERISTIC)
                     .ok_or(crate::Error::Vrlh("Could not verify power charateristic!"))
             })?;
         self.characteristic.clear_poison();

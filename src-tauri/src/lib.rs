@@ -39,7 +39,7 @@ impl AppState {
         if let Some(existing) = self.devices.lock().await.clone() {
             let map = existing.get_device_map();
             let guard = map.lock().await;
-            join_all(guard.values().map(|device| device.disconnect())).await;
+            join_all(guard.values().map(Device::disconnect)).await;
         };
     }
 }
@@ -59,11 +59,10 @@ pub fn run() {
         ])
         .build(generate_context!())
         .expect("Error occured while building application!")
-        .run(|handle, event| match &event {
-            RunEvent::ExitRequested { .. } => {
+        .run(|handle, event| {
+            if let RunEvent::ExitRequested { .. } = &event {
                 let state = handle.state::<AppState>();
                 block_on(async move { state.disconnect_all().await });
             }
-            _ => (),
         });
 }

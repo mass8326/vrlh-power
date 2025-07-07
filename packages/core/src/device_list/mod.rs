@@ -30,7 +30,7 @@ impl DeviceList {
         })
     }
 
-    pub fn get_adapter<'a>(&'a self) -> &'a Adapter {
+    pub fn get_adapter(&self) -> &Adapter {
         &self.adapter
     }
 
@@ -39,10 +39,10 @@ impl DeviceList {
     }
 
     pub async fn get_device(&self, id: &PeripheralId) -> Option<Device> {
-        self.map.clone().lock().await.get(&id).cloned()
+        self.map.clone().lock().await.get(id).cloned()
     }
 
-    pub async fn start_scan(&self, duration: u64) -> crate::Result<Receiver<DeviceUpdatePayload>> {
+    pub fn start_scan(&self, duration: u64) -> crate::Result<Receiver<DeviceUpdatePayload>> {
         let (tx, rx) = channel(1);
         let devices = self.clone();
 

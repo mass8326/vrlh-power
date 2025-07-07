@@ -2,11 +2,9 @@ import { listen } from "@tauri-apps/api/event";
 
 class Status {
   private _history = $state(["Initializing..."]);
-  
+
   public constructor() {
-     listen<string>("status", ({ payload }) => 
-    void  status.push(payload)
-    );
+    void listen<string>("status", ({ payload }) => void status.push(payload));
   }
 
   public get current(): string {

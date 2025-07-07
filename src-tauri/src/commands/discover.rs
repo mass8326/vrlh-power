@@ -1,6 +1,6 @@
 use futures::future::join_all;
 use tauri::{AppHandle, Manager as _};
-use vrlh_power_manager_core::DeviceList;
+use vrlh_power_manager_core::{Device, DeviceList};
 
 use crate::{events::EventEmitter, AppState};
 
@@ -11,17 +11,16 @@ pub async fn discover(app: AppHandle, duration: u64) -> crate::Result<()> {
         app.emit_status("Disconnecting from current devices...".into())?;
         let map = existing.get_device_map();
         let guard = map.lock().await;
-        join_all(guard.values().map(|device| device.disconnect())).await;
+        join_all(guard.values().map(Device::disconnect)).await;
     };
 
-    let devices = DeviceList::init().await.map_err(|err| {
+    let devices = DeviceList::init().await.inspect_err(|_| {
         let _ = app.emit_status("No bluetooth adapter available!".into());
-        err
     })?;
     *state.devices.lock().await = Some(devices.clone());
 
     app.emit_status("Scanning for lighthouses...".into())?;
-    let mut rx = devices.start_scan(duration).await?;
+    let mut rx = devices.start_scan(duration)?;
     while let Some(payload) = rx.recv().await {
         app.emit_device_update(payload)?;
     }
