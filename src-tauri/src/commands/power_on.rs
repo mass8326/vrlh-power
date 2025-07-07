@@ -1,62 +1,17 @@
-use btleplug::{
-    api::{Peripheral, WriteType},
-    platform::PeripheralId,
-};
-use futures::StreamExt;
-use tauri::{AppHandle, Emitter};
+use btleplug::platform::PeripheralId;
+use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::Mutex;
+use vrlh_power_manager_core::PowerOn;
 
-use crate::{
-    constants::DEVICE_MAP,
-    dto::{DevicePowerStatus, DeviceUpdatePayload},
-    util::get_power_characteristic,
-};
+use crate::AppState;
 
 #[tauri::command(async)]
 pub async fn power_on(app: AppHandle, id: PeripheralId) -> crate::Result<()> {
-    let device_map = DEVICE_MAP.lock().await;
-    let device = device_map
-        .get(&id)
-        .ok_or(crate::Error::Vrlh("Device not found"))?;
-
-    app.emit(
-        "device-update",
-        DeviceUpdatePayload {
-            id: &id,
-            addr: &device.address().to_string(),
-            name: None,
-            power: &DevicePowerStatus::PowerInitiated,
-        },
-    )?;
-
-    device.connect().await?;
-    let char = get_power_characteristic(device)
-        .await
-        .ok_or(crate::Error::Vrlh("Device not valid"))?;
-    device
-        .write(&char, [1].as_ref(), WriteType::WithResponse)
-        .await?;
-
-    device.subscribe(&char).await?;
-    let mut events = device.notifications().await?;
-    while let Some(event) = events.next().await {
-        let power = DevicePowerStatus::from(event.value);
-        app.emit(
-            "device-update",
-            DeviceUpdatePayload {
-                id: &id,
-                addr: &device.address().to_string(),
-                name: None,
-                power: &power,
-            },
-        )?;
-        match power {
-            DevicePowerStatus::PoweredOn | DevicePowerStatus::Unknown(_) => break,
-            _ => continue,
-        };
+    let state = app.state::<Mutex<AppState>>();
+    let devices = &state.lock().await.device_list;
+    let mut rx = devices.power_on(id).await?;
+    while let Some(payload) = rx.recv().await {
+        app.emit("device-update", payload)?;
     }
-
-    device.unsubscribe(&char).await?;
-    device.disconnect().await?;
-
     Ok(())
 }

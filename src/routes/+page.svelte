@@ -24,11 +24,13 @@
   }
 
   let pending = $state(true);
+  let status = $state<string>();
   let devices = new SvelteMap<string, DeviceUpdatePayload>();
 
   onMount(async () => {
     void discover();
     void listen<DeviceUpdatePayload>("device-update", ({ payload }) => {
+      console.log(payload);
       const name =
         payload.name ?? devices.get(payload.addr)?.name ?? "[Unavailable]";
       devices.set(payload.addr, { ...payload, name });
@@ -37,18 +39,29 @@
 
   async function discover(seconds?: number) {
     pending = true;
+    status = "Scanning for lighthouses...";
     devices.clear();
-    await invoke("discover", { duration: seconds ?? 15 });
-    pending = false;
+    try {
+      await invoke("discover", { duration: seconds ?? 15 });
+    } catch (err) {
+      status = JSON.stringify(err);
+    } finally {
+      pending = false;
+      status = "Done scanning!";
+    }
   }
 
   function createOnclick(id: unknown, power: DevicePowerCode): () => void {
     return function onclick() {
       switch (power) {
         case "POWERED_ON":
-          return invoke("power_off", { id });
+          return invoke("power_off", { id }).catch(
+            (err) => (status = JSON.stringify(err))
+          );
         case "POWERED_OFF":
-          return invoke("power_on", { id });
+          return invoke("power_on", { id }).catch(
+            (err) => (status = JSON.stringify(err))
+          );
       }
     };
   }
@@ -127,10 +140,6 @@
     </ul>
   </main>
   <footer class="px-4 py-1 bg-neutral-800 b-t-(1 black) font-italic">
-    {#if pending}
-      Scanning for lighthouses...
-    {:else}
-      Done scanning!
-    {/if}
+    {status}
   </footer>
 </div>

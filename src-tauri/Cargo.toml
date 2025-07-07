@@ -1,7 +1,7 @@
 [package]
 name = "vrlh-power-manager"
 version = "0.1.0"
-authors = ["you"]
+authors = ["mass8326"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,7 +10,7 @@ edition = "2021"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "vrlh_power_lib"
+name = "vrlh_power_manager_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -26,5 +26,12 @@ thiserror = "2.0.12"
 tokio = "1.46.1"
 btleplug = { version = "0.11.8", features = ["serde"] }
 uuid = "1.17.0"
-lazy_static = "1.5.0"
-once_cell = "1.21.3"
+vrlh-power-manager-core = { version = "0.1.0", path = "../packages/core" }
+
+[lints.clippy]
+pedantic = { level = "deny", priority = -1 }
+match_bool = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+unused_self = "warn"

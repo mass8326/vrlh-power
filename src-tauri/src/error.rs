@@ -6,9 +6,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("{}", .0)]
-    Vrlh(&'static str),
+    VrlhApp(String),
     #[error("{}", .0)]
-    Btle(#[from] btleplug::Error),
+    VrlhCore(#[from] vrlh_power_manager_core::Error),
     #[error("{}", .0)]
     Tauri(#[from] tauri::Error),
 }

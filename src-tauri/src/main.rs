@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    vrlh_power_lib::run()
+    vrlh_power_manager_lib::run()
 }

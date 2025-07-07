@@ -1,18 +1,18 @@
 use btleplug::platform::PeripheralId;
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DeviceUpdatePayload<'a> {
+pub struct DeviceUpdatePayload {
     /// Serializes differently per platform
-    pub id: &'a PeripheralId,
+    pub id: PeripheralId,
     /// Should be consistent across platforms
-    pub addr: &'a str,
-    pub name: Option<&'a str>,
-    pub power: &'a DevicePowerStatus,
+    pub addr: String,
+    pub name: Option<String>,
+    pub power: DevicePowerStatus,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub enum DevicePowerStatus {
     Loading,
     Error(String),
