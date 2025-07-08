@@ -1,33 +1,138 @@
-mod create_discovery_stream;
-mod power_off;
-mod power_on;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
-use std::{collections::HashMap, sync::Arc};
+use btleplug::{
+    api::{Central, CentralEvent, Peripheral as _, ScanFilter},
+    platform::{Adapter, Peripheral, PeripheralId},
+};
+use futures::StreamExt;
+use tokio::{
+    sync::mpsc::{channel, Receiver, Sender},
+    time::sleep,
+};
 
-use btleplug::platform::{Adapter, Peripheral, PeripheralId};
-use tokio::sync::Mutex;
+use crate::{
+    device::Device, get_default_adapter, util::assert_power_characteristic, DevicePowerStatus,
+    DeviceUpdatePayload,
+};
 
-use crate::{device::Device, get_default_adapter};
-
-pub use create_discovery_stream::CreateDiscoveryStream;
-pub use power_off::PowerOff;
-pub use power_on::PowerOn;
-
-#[derive(Clone, Debug, Default)]
+/// All clones share the same reference pointers
+#[derive(Clone, Debug)]
 pub struct DeviceList {
-    pub map: Arc<Mutex<HashMap<PeripheralId, Device>>>,
-    pub adapter: Option<Adapter>,
+    adapter: Adapter,
+    map: Arc<Mutex<HashMap<PeripheralId, Device>>>,
 }
 
 impl DeviceList {
-    pub async fn init(&mut self) -> crate::Result<()> {
-        self.adapter = Some(get_default_adapter().await?);
-        Ok(())
+    pub async fn init() -> crate::Result<Self> {
+        Ok(Self {
+            map: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            adapter: get_default_adapter().await?,
+        })
     }
 
-    pub fn assert_adapter(&self) -> crate::Result<Adapter> {
-        self.adapter
-            .clone()
-            .ok_or(crate::Error::Vrlh("Device list not initialized"))
+    pub fn get_adapter<'a>(&'a self) -> &'a Adapter {
+        &self.adapter
     }
+
+    pub async fn get_device(&self, id: &PeripheralId) -> Option<Device> {
+        self.map
+            .clone()
+            .lock()
+            .expect("Scan mutex must not be poisoned")
+            .get(&id)
+            .cloned()
+    }
+
+    pub async fn start_scan(&self, duration: u64) -> crate::Result<Receiver<DeviceUpdatePayload>> {
+        let (tx, rx) = channel(1);
+        let devices = self.clone();
+        tokio::spawn(async move { run_discovery_stream(devices, tx, duration).await });
+
+        Ok(rx)
+    }
+}
+
+async fn run_discovery_stream(
+    devices: DeviceList,
+    tx: Sender<DeviceUpdatePayload>,
+    duration: u64,
+) -> crate::Result<()> {
+    let adapter = devices.get_adapter();
+
+    let timer = Box::pin(sleep(Duration::from_secs(duration)));
+    let mut stream = adapter.events().await?.take_until(timer);
+
+    adapter.start_scan(ScanFilter::default()).await?;
+    while let Some(evt) = stream.next().await {
+        if let CentralEvent::DeviceDiscovered(id) = evt {
+            let future = handle_dicovered_device(devices.clone(), tx.clone(), id);
+            tokio::spawn(future);
+        };
+    }
+    adapter.stop_scan().await?;
+
+    Ok(())
+}
+
+async fn handle_dicovered_device(
+    list: DeviceList,
+    tx: Sender<DeviceUpdatePayload>,
+    id: PeripheralId,
+) -> crate::Result<()> {
+    if list
+        .map
+        .lock()
+        .expect("Scan mutex must not be poisoned")
+        .contains_key(&id)
+    {
+        return Ok(());
+    }
+    let device = list.get_adapter().peripheral(&id).await?;
+    let Some(name) = device
+        .properties()
+        .await?
+        .and_then(|props| props.local_name)
+        .and_then(|name| match name.starts_with("LHB-") {
+            true => Some(name),
+            false => None,
+        })
+    else {
+        return Ok(());
+    };
+
+    list.map
+        .lock()
+        .expect("Scan mutex must not be poisoned")
+        .insert(id.clone(), Device::new(device.clone(), name.clone()));
+    tx.send(DeviceUpdatePayload {
+        id: id.clone(),
+        addr: device.address().to_string(),
+        name: Some(name.clone()),
+        power: DevicePowerStatus::Loading,
+    })
+    .await?;
+    if !device.is_connected().await? {
+        device.connect().await?;
+    }
+    let status = get_device_status(&device).await?;
+    device.disconnect().await?;
+    tx.send(DeviceUpdatePayload {
+        id,
+        addr: device.address().to_string(),
+        name: Some(name),
+        power: status,
+    })
+    .await?;
+
+    Ok(())
+}
+
+async fn get_device_status(device: &Peripheral) -> crate::Result<DevicePowerStatus> {
+    let char = assert_power_characteristic(device).await?;
+    let bytes = device.read(&char).await?;
+    Ok(DevicePowerStatus::from(bytes))
 }

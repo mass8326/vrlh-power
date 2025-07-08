@@ -4,6 +4,7 @@
   import { onMount } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import toggle from "$lib/icons/power.svg?raw";
+  import { status } from "$lib/status.svelte";
 
   type DevicePowerCode =
     | "LOADING"
@@ -24,30 +25,26 @@
   }
 
   let pending = $state(true);
-  let status = $state<string>();
   let devices = new SvelteMap<string, DeviceUpdatePayload>();
 
   onMount(async () => {
     void discover();
     void listen<DeviceUpdatePayload>("device-update", ({ payload }) => {
-      console.log(payload);
-      const name =
-        payload.name ?? devices.get(payload.addr)?.name ?? "[Unavailable]";
+      const existing = devices.get(payload.addr);
+      if (!existing)
+        status.push(`Discovered "${payload.name ?? payload.addr}"`);
+      const name = payload.name ?? existing?.name ?? "[Unavailable]";
       devices.set(payload.addr, { ...payload, name });
     });
   });
 
   async function discover(seconds?: number) {
     pending = true;
-    status = "Scanning for lighthouses...";
     devices.clear();
     try {
       await invoke("discover", { duration: seconds ?? 15 });
-    } catch (err) {
-      status = JSON.stringify(err);
     } finally {
       pending = false;
-      status = "Done scanning!";
     }
   }
 
@@ -55,12 +52,12 @@
     return function onclick() {
       switch (power) {
         case "POWERED_ON":
-          return invoke("power_off", { id }).catch(
-            (err) => (status = JSON.stringify(err))
+          return invoke("power_off", { id }).catch((err) =>
+            status.push(JSON.stringify(err))
           );
         case "POWERED_OFF":
-          return invoke("power_on", { id }).catch(
-            (err) => (status = JSON.stringify(err))
+          return invoke("power_on", { id }).catch((err) =>
+            status.push(JSON.stringify(err))
           );
       }
     };
@@ -140,6 +137,6 @@
     </ul>
   </main>
   <footer class="px-4 py-1 bg-neutral-800 b-t-(1 black) font-italic">
-    {status}
+    {status.current}
   </footer>
 </div>

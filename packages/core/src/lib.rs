@@ -10,7 +10,8 @@ use btleplug::{
     platform::{Adapter, Manager},
 };
 
-pub use device_list::*;
+pub use device::Device;
+pub use device_list::DeviceList;
 pub use dto::*;
 pub use error::*;
 
