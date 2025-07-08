@@ -8,7 +8,7 @@ use btleplug::{
     api::{Central, CentralEvent, Peripheral as _, ScanFilter},
     platform::{Adapter, Peripheral, PeripheralId},
 };
-use futures::StreamExt;
+use futures::{join, StreamExt};
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::sleep,
@@ -91,8 +91,8 @@ async fn handle_dicovered_device(
     {
         return Ok(());
     }
-    let device = list.get_adapter().peripheral(&id).await?;
-    let Some(name) = device
+    let peripheral = list.get_adapter().peripheral(&id).await?;
+    let Some(name) = peripheral
         .properties()
         .await?
         .and_then(|props| props.local_name)
@@ -104,31 +104,25 @@ async fn handle_dicovered_device(
         return Ok(());
     };
 
+    let device = Device::new(peripheral.clone(), name.clone());
     list.map
         .lock()
         .expect("Scan mutex must not be poisoned")
-        .insert(id.clone(), Device::new(device.clone(), name.clone()));
-    tx.send(DeviceUpdatePayload {
-        id: id.clone(),
-        addr: device.address().to_string(),
-        name: Some(name.clone()),
-        power: DevicePowerStatus::Loading,
-    })
+        .insert(id.clone(), device.clone());
+    tx.send(DeviceUpdatePayload::from_device(
+        &device,
+        DevicePowerStatus::Loading,
+    ))
     .await?;
-    if !device.is_connected().await? {
-        device.connect().await?;
+    if !peripheral.is_connected().await? {
+        peripheral.connect().await?;
     }
-    let status = get_device_status(&device).await?;
-    device.disconnect().await?;
-    tx.send(DeviceUpdatePayload {
-        id,
-        addr: device.address().to_string(),
-        name: Some(name),
-        power: status,
-    })
-    .await?;
-
-    Ok(())
+    let power = get_device_status(&peripheral).await?;
+    let (result, _) = join!(
+        tx.send(DeviceUpdatePayload::from_device(&device, power)),
+        peripheral.disconnect(),
+    );
+    result.map_err(Into::into)
 }
 
 async fn get_device_status(device: &Peripheral) -> crate::Result<DevicePowerStatus> {

@@ -1,5 +1,6 @@
 use btleplug::platform::PeripheralId;
 use tauri::{AppHandle, Emitter, Manager};
+use vrlh_power_manager_core::PowerCommand;
 
 use crate::AppState;
 
@@ -9,7 +10,7 @@ pub async fn power_on(app: AppHandle, id: PeripheralId) -> crate::Result<()> {
     let device = state.assert_device(&id).await?;
 
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-    tokio::spawn(async move { device.power_on(tx).await });
+    tokio::spawn(async move { device.power_set(tx, PowerCommand::TurnOn).await });
     while let Some(payload) = rx.recv().await {
         app.emit("device-update", payload)?;
     }

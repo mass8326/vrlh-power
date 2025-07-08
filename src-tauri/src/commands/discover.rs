@@ -18,6 +18,6 @@ pub async fn discover(app: AppHandle, duration: u64) -> crate::Result<()> {
         app.emit_device_update(payload)?;
     }
 
-    app.emit_status("Done scanning!".into())?;
+    app.emit_status("Done scanning for devices!".into())?;
     Ok(())
 }

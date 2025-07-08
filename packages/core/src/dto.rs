@@ -1,6 +1,8 @@
 use btleplug::platform::PeripheralId;
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 
+use crate::Device;
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceUpdatePayload {
@@ -8,8 +10,19 @@ pub struct DeviceUpdatePayload {
     pub id: PeripheralId,
     /// Should be consistent across platforms
     pub addr: String,
-    pub name: Option<String>,
+    pub name: String,
     pub power: DevicePowerStatus,
+}
+
+impl DeviceUpdatePayload {
+    pub fn from_device(device: &Device, power: DevicePowerStatus) -> Self {
+        Self {
+            id: device.id(),
+            addr: device.address(),
+            name: device.name().to_string(),
+            power,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -18,6 +31,7 @@ pub enum DevicePowerStatus {
     Error(String),
     PoweredOn,
     PoweredOff,
+    PowerAcknowledged,
     PowerPending,
     PowerInitiated,
     Unknown(Vec<u8>),
@@ -31,6 +45,7 @@ impl Serialize for DevicePowerStatus {
             Self::Error(_) => "ERROR",
             Self::PoweredOn => "POWERED_ON",
             Self::PoweredOff => "POWERED_OFF",
+            Self::PowerAcknowledged => "POWER_ACKNOWLEDGED",
             Self::PowerPending => "POWER_PENDING",
             Self::PowerInitiated => "POWER_INITIATED",
             Self::Unknown(_) => "POWER_UNKNOWN",
@@ -54,6 +69,7 @@ impl From<Vec<u8>> for DevicePowerStatus {
         match value[0] {
             0 => Self::PoweredOff,
             1 => Self::PowerInitiated,
+            8 => Self::PowerAcknowledged,
             9 => Self::PowerPending,
             11 => Self::PoweredOn,
             _ => Self::Unknown(value),

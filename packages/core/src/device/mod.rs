@@ -2,7 +2,7 @@ use btleplug::{
     api::{Peripheral as _, WriteType},
     platform::{Peripheral, PeripheralId},
 };
-use futures::StreamExt;
+use futures::{try_join, StreamExt};
 use tokio::sync::mpsc::Sender;
 
 use crate::{util::assert_power_characteristic, DevicePowerStatus, DeviceUpdatePayload};
@@ -11,6 +11,20 @@ use crate::{util::assert_power_characteristic, DevicePowerStatus, DeviceUpdatePa
 pub struct Device {
     peripheral: Peripheral,
     name: String,
+}
+
+pub enum PowerCommand {
+    TurnOn,
+    TurnOff,
+}
+
+impl From<PowerCommand> for &[u8] {
+    fn from(value: PowerCommand) -> Self {
+        match value {
+            PowerCommand::TurnOff => &[0],
+            PowerCommand::TurnOn => &[1],
+        }
+    }
 }
 
 impl Device {
@@ -30,73 +44,48 @@ impl Device {
         &self.name
     }
 
-    pub async fn power_off(&self, tx: Sender<DeviceUpdatePayload>) -> crate::Result<()> {
-        tx.send(DeviceUpdatePayload {
-            id: self.id(),
-            addr: self.address(),
-            name: None,
-            power: DevicePowerStatus::PowerPending,
-        })
-        .await?;
-
-        let char = assert_power_characteristic(&self.peripheral).await?;
+    pub async fn power_set(
+        &self,
+        tx: Sender<DeviceUpdatePayload>,
+        command: PowerCommand,
+    ) -> crate::Result<()> {
         if !self.peripheral.is_connected().await? {
             self.peripheral.connect().await?;
         }
-        self.peripheral
-            .write(&char, [0].as_ref(), WriteType::WithResponse)
-            .await?;
-        self.peripheral.disconnect().await?;
-
-        tx.send(DeviceUpdatePayload {
-            id: self.id(),
-            addr: self.address(),
-            name: None,
-            power: DevicePowerStatus::PoweredOff,
-        })
-        .await?;
-
-        Ok(())
-    }
-
-    pub async fn power_on(&self, tx: Sender<DeviceUpdatePayload>) -> crate::Result<()> {
-        tx.send(DeviceUpdatePayload {
-            id: self.id(),
-            addr: self.address(),
-            name: None,
-            power: DevicePowerStatus::PowerInitiated,
-        })
-        .await?;
-        if !self.peripheral.is_connected().await? {
-            self.peripheral.connect().await?;
-        }
-        let char = assert_power_characteristic(&self.peripheral).await?;
-        self.peripheral
-            .write(&char, [1].as_ref(), WriteType::WithResponse)
-            .await?;
-        self.peripheral.subscribe(&char).await?;
+        let characteristic = assert_power_characteristic(&self.peripheral).await?;
+        self.peripheral.subscribe(&characteristic).await?;
         let mut events = self.peripheral.notifications().await?;
+
+        self.peripheral
+            .write(&characteristic, command.into(), WriteType::WithResponse)
+            .await?;
         while let Some(event) = events.next().await {
             let power = DevicePowerStatus::from(event.value);
-            let stop = match power {
-                DevicePowerStatus::PoweredOn | DevicePowerStatus::Unknown(_) => true,
-                _ => false,
-            };
-            tx.send(DeviceUpdatePayload {
-                id: self.id(),
-                addr: self.address(),
-                name: None,
-                power: power,
-            })
-            .await?;
+            let stop = matches!(
+                power,
+                DevicePowerStatus::PoweredOn | DevicePowerStatus::PoweredOff
+            );
+            self.send_power_status(&tx, power).await?;
             if stop {
                 break;
             }
         }
 
-        self.peripheral.unsubscribe(&char).await?;
-        self.peripheral.disconnect().await?;
+        try_join!(
+            self.peripheral.unsubscribe(&characteristic),
+            self.peripheral.disconnect(),
+        )
+        .map_err(|_| crate::Error::Vrlh("Could not disconnect from device"))
+        .map(|_| ())
+    }
 
-        Ok(())
+    async fn send_power_status(
+        &self,
+        tx: &Sender<DeviceUpdatePayload>,
+        power: DevicePowerStatus,
+    ) -> crate::Result<()> {
+        tx.send(DeviceUpdatePayload::from_device(self, power))
+            .await
+            .map_err(Into::into)
     }
 }

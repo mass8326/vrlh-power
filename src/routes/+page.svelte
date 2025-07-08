@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
-  import { SvelteMap } from "svelte/reactivity";
+  import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import toggle from "$lib/icons/power.svg?raw";
   import { status } from "$lib/status.svelte";
 
@@ -25,6 +25,7 @@
   }
 
   let pending = $state(true);
+  let powering = new SvelteSet<string>();
   let devices = new SvelteMap<string, DeviceUpdatePayload>();
 
   onMount(async () => {
@@ -48,18 +49,25 @@
     }
   }
 
-  function createOnclick(id: unknown, power: DevicePowerCode): () => void {
+  const toggles = new Map<DevicePowerCode, string>([
+    ["POWERED_ON", "power_off"],
+    ["POWERED_OFF", "power_on"],
+  ]);
+
+  function createOnclick(device: DeviceUpdatePayload): () => void {
     return function onclick() {
-      switch (power) {
-        case "POWERED_ON":
-          return invoke("power_off", { id }).catch((err) =>
-            status.push(JSON.stringify(err))
-          );
-        case "POWERED_OFF":
-          return invoke("power_on", { id }).catch((err) =>
-            status.push(JSON.stringify(err))
-          );
-      }
+      if (!device) return;
+      const { id, power } = device;
+      const command = toggles.get(power.code);
+      if (!command) return;
+      powering.add(device.addr);
+      invoke(command, { id })
+        .catch((err) => {
+          status.push(JSON.stringify(err));
+        })
+        .finally(() => {
+          powering.delete(device.addr);
+        });
     };
   }
 
@@ -74,8 +82,9 @@
     }
   }
 
-  function getColors(power: DevicePowerCode): string | undefined {
-    switch (power) {
+  function getColors(device: DeviceUpdatePayload): string | undefined {
+    if (powering.has(device.addr)) return;
+    switch (device.power.code) {
       case "POWERED_ON":
         return "bg-blue-900 b-blue-950 hover:(bg-blue-700 b-blue-800)";
       case "POWERED_OFF":
@@ -100,9 +109,10 @@
       </button>
     </div>
     <ul class="flex flex-col gap-4">
-      {#each devices.values() as { addr, id, name, power }}
+      {#each devices.values() as device}
+        {@const { addr, name, power } = device}
         {@const action = getAction(power.code)}
-        {@const colors = getColors(power.code)}
+        {@const colors = getColors(device)}
         <li
           class="p-4 flex justify-between b-(1 black) bg-neutral-800 rounded font-mono"
         >
@@ -122,7 +132,7 @@
               colors,
             ]}
             disabled={colors ? undefined : true}
-            onclick={createOnclick(id, power.code)}
+            onclick={createOnclick(device)}
             title={action}
           >
             {@html toggle}
