@@ -9,7 +9,7 @@ use tokio::sync::mpsc::Sender;
 
 use crate::{
     constants::{LHV2_GATT_POWER_CHARACTERISTIC, LHV2_GATT_POWER_SERVICE},
-    DevicePowerStatus, DeviceUpdatePayload,
+    DevicePowerStatus,
 };
 
 #[derive(Clone, Debug)]
@@ -56,7 +56,7 @@ impl Device {
 
     pub async fn power_set(
         &self,
-        tx: Sender<DeviceUpdatePayload>,
+        tx: Sender<DevicePowerStatus>,
         command: PowerCommand,
     ) -> crate::Result<()> {
         self.ensure_connected().await?;
@@ -73,7 +73,7 @@ impl Device {
                 power,
                 DevicePowerStatus::PoweredOn | DevicePowerStatus::PoweredOff
             );
-            self.send_power_status(&tx, power).await?;
+            tx.send(power).await?;
             if stop {
                 break;
             }
@@ -83,16 +83,6 @@ impl Device {
             .unsubscribe(&characteristic)
             .await
             .map_err(|_| crate::Error::Vrlh("Could not unsubscribe from device"))
-    }
-
-    async fn send_power_status(
-        &self,
-        tx: &Sender<DeviceUpdatePayload>,
-        power: DevicePowerStatus,
-    ) -> crate::Result<()> {
-        tx.send(DeviceUpdatePayload::from_device(self, power))
-            .await
-            .map_err(Into::into)
     }
 
     pub async fn ensure_connected(&self) -> crate::Result<()> {

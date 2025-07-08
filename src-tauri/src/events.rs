@@ -3,7 +3,7 @@ use tauri::{AppHandle, Emitter};
 use vrlh_power_manager_core::DeviceUpdatePayload;
 
 #[derive(Clone, Debug, Serialize)]
-pub struct StatusPayload(String);
+struct StatusPayload(String);
 
 impl StatusPayload {
     pub fn new(msg: String) -> Self {

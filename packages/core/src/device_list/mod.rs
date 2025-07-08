@@ -47,32 +47,27 @@ impl DeviceList {
     pub async fn start_scan(&self, duration: u64) -> crate::Result<Receiver<DeviceUpdatePayload>> {
         let (tx, rx) = channel(1);
         let devices = self.clone();
-        tokio::spawn(async move { run_discovery_stream(devices, tx, duration).await });
+
+        tokio::spawn(async move {
+            let adapter = devices.get_adapter();
+
+            let timer = Box::pin(sleep(Duration::from_secs(duration)));
+            let mut stream = adapter.events().await?.take_until(timer);
+
+            adapter.start_scan(ScanFilter::default()).await?;
+            while let Some(evt) = stream.next().await {
+                if let CentralEvent::DeviceDiscovered(id) = evt {
+                    let future = handle_dicovered_device(devices.clone(), tx.clone(), id);
+                    tokio::spawn(future);
+                };
+            }
+            adapter.stop_scan().await?;
+
+            Ok::<(), crate::Error>(())
+        });
 
         Ok(rx)
     }
-}
-
-async fn run_discovery_stream(
-    devices: DeviceList,
-    tx: Sender<DeviceUpdatePayload>,
-    duration: u64,
-) -> crate::Result<()> {
-    let adapter = devices.get_adapter();
-
-    let timer = Box::pin(sleep(Duration::from_secs(duration)));
-    let mut stream = adapter.events().await?.take_until(timer);
-
-    adapter.start_scan(ScanFilter::default()).await?;
-    while let Some(evt) = stream.next().await {
-        if let CentralEvent::DeviceDiscovered(id) = evt {
-            let future = handle_dicovered_device(devices.clone(), tx.clone(), id);
-            tokio::spawn(future);
-        };
-    }
-    adapter.stop_scan().await?;
-
-    Ok(())
 }
 
 async fn handle_dicovered_device(
