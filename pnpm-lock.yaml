@@ -47,6 +47,9 @@ importers:
       '@unocss/transformer-variant-group':
         specifier: ^66.3.3
         version: 66.3.3
+      remeda:
+        specifier: ^2.24.0
+        version: 2.24.0
       svelte:
         specifier: ^5.35.4
         version: 5.35.4
@@ -856,6 +859,9 @@ packages:
     resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
     engines: {node: '>= 14.18.0'}
 
+  remeda@2.24.0:
+    resolution: {integrity: sha512-EGC3ZG304e3S1ZMdkhBjIPFn0NdI6d/NWqcxe34+TfG+c3cv6TcVavn/z17am8aQsrGZPX+fx4U6mTQvNRv4MQ==}
+
   rollup@4.44.2:
     resolution: {integrity: sha512-PVoapzTwSEcelaWGth3uR66u7ZRo6qhPHc0f2uRO9fX6XDVNrIiGYS0Pj9+R8yIIYSD/mCx2b16Ws9itljKSPg==}
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
@@ -902,6 +908,10 @@ packages:
   totalist@3.0.1:
     resolution: {integrity: sha512-sf4i37nQ2LBx4m3wB74y+ubopq6W/dIzXg0FDGjsYnZHVa1Da8FH853wlL2gtUhg+xJXjfk3kUZS3BRoQeoQBQ==}
     engines: {node: '>=6'}
+
+  type-fest@4.41.0:
+    resolution: {integrity: sha512-TeTSQ6H5YHvpqVwBRcnLDCBnDOHWYu7IvGbHT6N8AOymcr9PJGjc1GTtiWZTYg0NCgYwvnYWEkVChQAr9bjfwA==}
+    engines: {node: '>=16'}
 
   typescript@5.8.3:
     resolution: {integrity: sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ==}
@@ -1733,6 +1743,10 @@ snapshots:
 
   readdirp@4.1.2: {}
 
+  remeda@2.24.0:
+    dependencies:
+      type-fest: 4.41.0
+
   rollup@4.44.2:
     dependencies:
       '@types/estree': 1.0.8
@@ -1814,6 +1828,8 @@ snapshots:
       is-number: 7.0.0
 
   totalist@3.0.1: {}
+
+  type-fest@4.41.0: {}
 
   typescript@5.8.3: {}
 

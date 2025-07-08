@@ -26,6 +26,7 @@
     "@unocss/reset": "^66.3.3",
     "@unocss/transformer-directives": "^66.3.3",
     "@unocss/transformer-variant-group": "^66.3.3",
+    "remeda": "^2.24.0",
     "svelte": "^5.35.4",
     "svelte-check": "^4.0.0",
     "typescript": "~5.8.3",

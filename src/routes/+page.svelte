@@ -1,10 +1,13 @@
 <script lang="ts">
+  import * as remeda from "remeda";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
-  import toggle from "$lib/icons/power.svg?raw";
+  import toggleSvg from "$lib/icons/power.svg?raw";
+  import loadingSvg from "$lib/icons/loading.svg?raw";
   import { status } from "$lib/status.svelte";
+  import { slide } from "svelte/transition";
 
   type DevicePowerCode =
     | "LOADING"
@@ -20,7 +23,7 @@
     id: unknown;
     /** Should be consistent across platorms */
     addr: string;
-    name: string | null;
+    name: string;
     power: { code: DevicePowerCode; detail: string | null };
   }
 
@@ -32,10 +35,8 @@
     void discover();
     void listen<DeviceUpdatePayload>("device-update", ({ payload }) => {
       const existing = devices.get(payload.addr);
-      if (!existing)
-        status.push(`Discovered "${payload.name ?? payload.addr}"`);
-      const name = payload.name ?? existing?.name ?? "[Unavailable]";
-      devices.set(payload.addr, { ...payload, name });
+      if (!existing) status.push(`Discovered "${payload.name}"`);
+      devices.set(payload.addr, payload);
     });
   });
 
@@ -94,7 +95,7 @@
 </script>
 
 <div class="h-full flex flex-col justify-between">
-  <main class="p-4 space-y-4">
+  <main class="p-4 space-y-4 min-h-0 flex-1 overflow-auto">
     <div class="flex gap-4 items-center">
       <button
         class={[
@@ -109,18 +110,22 @@
       </button>
     </div>
     <ul class="flex flex-col gap-4">
-      {#each devices.values() as device}
+      {#each remeda.sortBy([...devices.values()], (device) => device.name) as device (device.addr)}
         {@const { addr, name, power } = device}
         {@const action = getAction(power.code)}
         {@const colors = getColors(device)}
         <li
           class="p-4 flex justify-between b-(1 black) bg-neutral-800 rounded font-mono"
+          transition:slide
         >
           <div>
-            <h3 class="text-3xl font-bold" title={addr}>
+            <h3 class="text-3xl font-bold">
               {name}
             </h3>
-            <div class="font-italic">
+            <div class="-mt-1 text-sm font-italic">
+              {addr}
+            </div>
+            <div class="mt-2">
               {power.code}
               {#if power.detail}({JSON.stringify(power.detail)}){/if}
             </div>
@@ -135,7 +140,9 @@
             onclick={createOnclick(device)}
             title={action}
           >
-            {@html toggle}
+            <div class={[colors ? undefined : "animate-spin"]}>
+              {@html colors ? toggleSvg : loadingSvg}
+            </div>
           </button>
         </li>
       {/each}
