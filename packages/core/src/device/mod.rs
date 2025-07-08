@@ -92,6 +92,13 @@ impl Device {
         Ok(())
     }
 
+    pub async fn disconnect(&self) {
+        self.peripheral
+            .disconnect()
+            .await
+            .expect("Device disconnect should never error");
+    }
+
     pub async fn get_device_status(&self) -> crate::Result<DevicePowerStatus> {
         let char = self.get_power_characteristic().await?;
         let bytes = self.peripheral.read(&char).await?;

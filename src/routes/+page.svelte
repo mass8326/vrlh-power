@@ -87,9 +87,9 @@
     if (powering.has(device.addr)) return;
     switch (device.power.code) {
       case "POWERED_ON":
-        return "bg-blue-900 b-blue-950 hover:(bg-blue-700 b-blue-800)";
+        return "bg-blue-900 b-blue-950 hover:(bg-red-700 b-red-800)";
       case "POWERED_OFF":
-        return "bg-red-900 b-red-950 hover:(bg-red-700 b-red-800)";
+        return "bg-red-900 b-red-950 hover:(bg-blue-700 b-blue-800)";
     }
   }
 </script>

@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use btleplug::{
     api::{Central, CentralEvent, Peripheral as _, ScanFilter},
@@ -10,7 +6,10 @@ use btleplug::{
 };
 use futures::StreamExt;
 use tokio::{
-    sync::mpsc::{channel, Receiver, Sender},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        Mutex,
+    },
     time::sleep,
 };
 
@@ -26,7 +25,7 @@ pub struct DeviceList {
 impl DeviceList {
     pub async fn init() -> crate::Result<Self> {
         Ok(Self {
-            map: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            map: Arc::new(Mutex::new(HashMap::new())),
             adapter: get_default_adapter().await?,
         })
     }
@@ -35,13 +34,12 @@ impl DeviceList {
         &self.adapter
     }
 
+    pub fn get_device_map(&self) -> Arc<Mutex<HashMap<PeripheralId, Device>>> {
+        self.map.clone()
+    }
+
     pub async fn get_device(&self, id: &PeripheralId) -> Option<Device> {
-        self.map
-            .clone()
-            .lock()
-            .expect("Scan mutex must not be poisoned")
-            .get(&id)
-            .cloned()
+        self.map.clone().lock().await.get(&id).cloned()
     }
 
     pub async fn start_scan(&self, duration: u64) -> crate::Result<Receiver<DeviceUpdatePayload>> {
@@ -75,12 +73,7 @@ async fn handle_dicovered_device(
     tx: Sender<DeviceUpdatePayload>,
     id: PeripheralId,
 ) -> crate::Result<()> {
-    if list
-        .map
-        .lock()
-        .expect("Scan mutex must not be poisoned")
-        .contains_key(&id)
-    {
+    if list.map.lock().await.contains_key(&id) {
         return Ok(());
     }
     let peripheral = list.get_adapter().peripheral(&id).await?;
@@ -97,10 +90,7 @@ async fn handle_dicovered_device(
     };
 
     let device = Device::new(peripheral.clone(), name.clone());
-    list.map
-        .lock()
-        .expect("Scan mutex must not be poisoned")
-        .insert(id, device.clone());
+    list.map.lock().await.insert(id, device.clone());
     tx.send(DeviceUpdatePayload::from_device(
         &device,
         DevicePowerStatus::Loading,

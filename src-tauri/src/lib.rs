@@ -4,7 +4,10 @@ mod events;
 
 use btleplug::platform::PeripheralId;
 pub use error::*;
-use tauri::{Builder, Manager};
+use futures::future::join_all;
+use tauri::{
+    async_runtime::block_on, generate_context, generate_handler, Builder, Manager, RunEvent,
+};
 use tokio::sync::Mutex;
 use vrlh_power_manager_core::{Device, DeviceList};
 
@@ -31,6 +34,14 @@ impl AppState {
             .await
             .ok_or(crate::Error::VrlhApp(format!("Device '{id}' not found!")))
     }
+
+    async fn disconnect_all(&self) {
+        if let Some(existing) = self.devices.lock().await.clone() {
+            let map = existing.get_device_map();
+            let guard = map.lock().await;
+            join_all(guard.values().map(|device| device.disconnect())).await;
+        };
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -41,11 +52,18 @@ pub fn run() {
             app.manage(AppState::default());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(generate_handler![
             commands::discover,
             commands::power_on,
             commands::power_off,
         ])
-        .run(tauri::generate_context!())
-        .expect("Error occured while running application!");
+        .build(generate_context!())
+        .expect("Error occured while building application!")
+        .run(|handle, event| match &event {
+            RunEvent::ExitRequested { .. } => {
+                let state = handle.state::<AppState>();
+                block_on(async move { state.disconnect_all().await });
+            }
+            _ => (),
+        });
 }
