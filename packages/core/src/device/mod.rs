@@ -1,16 +1,22 @@
+use std::sync::{Arc, Mutex};
+
 use btleplug::{
-    api::{Peripheral as _, WriteType},
+    api::{Characteristic, Peripheral as _, WriteType},
     platform::{Peripheral, PeripheralId},
 };
-use futures::{try_join, StreamExt};
+use futures::StreamExt;
 use tokio::sync::mpsc::Sender;
 
-use crate::{util::assert_power_characteristic, DevicePowerStatus, DeviceUpdatePayload};
+use crate::{
+    constants::{LHV2_GATT_POWER_CHARACTERISTIC, LHV2_GATT_POWER_SERVICE},
+    DevicePowerStatus, DeviceUpdatePayload,
+};
 
 #[derive(Clone, Debug)]
 pub struct Device {
     peripheral: Peripheral,
     name: String,
+    characteristic: Arc<Mutex<Option<Characteristic>>>,
 }
 
 pub enum PowerCommand {
@@ -29,7 +35,11 @@ impl From<PowerCommand> for &[u8] {
 
 impl Device {
     pub fn new(peripheral: Peripheral, name: String) -> Self {
-        Self { peripheral, name }
+        Self {
+            peripheral,
+            name,
+            characteristic: Arc::new(Mutex::new(None)),
+        }
     }
 
     pub fn id(&self) -> PeripheralId {
@@ -49,10 +59,8 @@ impl Device {
         tx: Sender<DeviceUpdatePayload>,
         command: PowerCommand,
     ) -> crate::Result<()> {
-        if !self.peripheral.is_connected().await? {
-            self.peripheral.connect().await?;
-        }
-        let characteristic = assert_power_characteristic(&self.peripheral).await?;
+        self.ensure_connected().await?;
+        let characteristic = self.get_power_characteristic().await?;
         self.peripheral.subscribe(&characteristic).await?;
         let mut events = self.peripheral.notifications().await?;
 
@@ -71,12 +79,10 @@ impl Device {
             }
         }
 
-        try_join!(
-            self.peripheral.unsubscribe(&characteristic),
-            self.peripheral.disconnect(),
-        )
-        .map_err(|_| crate::Error::Vrlh("Could not disconnect from device"))
-        .map(|_| ())
+        self.peripheral
+            .unsubscribe(&characteristic)
+            .await
+            .map_err(|_| crate::Error::Vrlh("Could not unsubscribe from device"))
     }
 
     async fn send_power_status(
@@ -87,5 +93,50 @@ impl Device {
         tx.send(DeviceUpdatePayload::from_device(self, power))
             .await
             .map_err(Into::into)
+    }
+
+    pub async fn ensure_connected(&self) -> crate::Result<()> {
+        if !self.peripheral.is_connected().await? {
+            self.peripheral.connect().await?
+        };
+        Ok(())
+    }
+
+    pub async fn get_device_status(&self) -> crate::Result<DevicePowerStatus> {
+        let char = self.get_power_characteristic().await?;
+        let bytes = self.peripheral.read(&char).await?;
+        Ok(DevicePowerStatus::from(bytes))
+    }
+
+    pub async fn get_power_characteristic(&self) -> crate::Result<Characteristic> {
+        if let Some(existing) = self
+            .characteristic
+            .lock()
+            .map_or(None, |guard| guard.clone())
+        {
+            return Ok(existing);
+        }
+        self.peripheral.discover_services().await?;
+        let found = self
+            .peripheral
+            .services()
+            .into_iter()
+            .filter(|service| service.uuid == LHV2_GATT_POWER_SERVICE)
+            .next()
+            .ok_or(crate::Error::Vrlh("Could not verify power service!"))
+            .and_then(|service| {
+                service
+                    .characteristics
+                    .into_iter()
+                    .filter(|char| char.uuid == LHV2_GATT_POWER_CHARACTERISTIC)
+                    .next()
+                    .ok_or(crate::Error::Vrlh("Could not verify power charateristic!"))
+            })?;
+        self.characteristic.clear_poison();
+        *self
+            .characteristic
+            .lock()
+            .expect("Characteristic mutex must not be poisoned") = Some(found.clone());
+        Ok(found)
     }
 }

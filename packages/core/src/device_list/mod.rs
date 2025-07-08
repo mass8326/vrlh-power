@@ -6,18 +6,15 @@ use std::{
 
 use btleplug::{
     api::{Central, CentralEvent, Peripheral as _, ScanFilter},
-    platform::{Adapter, Peripheral, PeripheralId},
+    platform::{Adapter, PeripheralId},
 };
-use futures::{join, StreamExt};
+use futures::StreamExt;
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::sleep,
 };
 
-use crate::{
-    device::Device, get_default_adapter, util::assert_power_characteristic, DevicePowerStatus,
-    DeviceUpdatePayload,
-};
+use crate::{device::Device, get_default_adapter, DevicePowerStatus, DeviceUpdatePayload};
 
 /// All clones share the same reference pointers
 #[derive(Clone, Debug)]
@@ -108,25 +105,16 @@ async fn handle_dicovered_device(
     list.map
         .lock()
         .expect("Scan mutex must not be poisoned")
-        .insert(id.clone(), device.clone());
+        .insert(id, device.clone());
     tx.send(DeviceUpdatePayload::from_device(
         &device,
         DevicePowerStatus::Loading,
     ))
     .await?;
-    if !peripheral.is_connected().await? {
-        peripheral.connect().await?;
-    }
-    let power = get_device_status(&peripheral).await?;
-    let (result, _) = join!(
-        tx.send(DeviceUpdatePayload::from_device(&device, power)),
-        peripheral.disconnect(),
-    );
-    result.map_err(Into::into)
-}
+    device.ensure_connected().await?;
+    let power = device.get_device_status().await?;
+    tx.send(DeviceUpdatePayload::from_device(&device, power))
+        .await?;
 
-async fn get_device_status(device: &Peripheral) -> crate::Result<DevicePowerStatus> {
-    let char = assert_power_characteristic(device).await?;
-    let bytes = device.read(&char).await?;
-    Ok(DevicePowerStatus::from(bytes))
+    Ok(())
 }

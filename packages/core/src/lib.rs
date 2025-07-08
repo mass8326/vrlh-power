@@ -3,7 +3,6 @@ mod device;
 mod device_list;
 mod dto;
 mod error;
-mod util;
 
 use btleplug::{
     api::Manager as _,
