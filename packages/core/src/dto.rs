@@ -1,78 +1,228 @@
+use std::fmt::{Debug, Display, Write};
+
+use async_trait::async_trait;
 use btleplug::platform::PeripheralId;
-use serde::{ser::SerializeStruct, Serialize, Serializer};
+use serde::{Serialize, Serializer};
+use tokio::sync::mpsc::{error::SendError, Sender};
 
 use crate::Device;
 
 #[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct DeviceUpdatePayload {
     /// Serializes differently per platform
     pub id: PeripheralId,
     /// Should be consistent across platforms
     pub addr: String,
     pub name: String,
-    pub power: DevicePowerStatus,
+    pub local: Option<DeviceLocalStatus>,
+    pub remote: Option<DeviceRemoteStatus>,
 }
 
 impl DeviceUpdatePayload {
-    pub fn from_device(device: &Device, power: DevicePowerStatus) -> Self {
+    pub fn from_device_statuses(
+        device: &Device,
+        local: DeviceLocalStatus,
+        remote: DeviceRemoteStatus,
+    ) -> Self {
         Self {
             id: device.id(),
             addr: device.address(),
             name: device.name().to_string(),
-            power,
+            local: Some(local),
+            remote: Some(remote),
+        }
+    }
+
+    pub fn from_device_local_status(device: &Device, status: DeviceLocalStatus) -> Self {
+        Self {
+            id: device.id(),
+            addr: device.address(),
+            name: device.name().to_string(),
+            local: Some(status),
+            remote: None,
+        }
+    }
+
+    pub fn from_device_remote_status(device: &Device, status: DeviceRemoteStatus) -> Self {
+        Self {
+            id: device.id(),
+            addr: device.address(),
+            name: device.name().to_string(),
+            local: None,
+            remote: Some(status),
         }
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum DevicePowerStatus {
-    Loading,
-    Error(String),
-    PoweredOn,
-    PoweredOff,
-    PowerAcknowledged,
-    PowerPending,
-    PowerInitiated,
-    Unknown(Vec<u8>),
+#[async_trait]
+pub trait SendDeviceStatus {
+    async fn send_device_statuses(
+        &self,
+        device: &Device,
+        local: DeviceLocalStatus,
+        remote: DeviceRemoteStatus,
+    ) -> Result<(), SendError<DeviceUpdatePayload>>;
+
+    async fn send_device_local_status(
+        &self,
+        device: &Device,
+        status: DeviceLocalStatus,
+    ) -> Result<(), SendError<DeviceUpdatePayload>>;
+
+    async fn send_device_remote_status(
+        &self,
+        device: &Device,
+        status: DeviceRemoteStatus,
+    ) -> Result<(), SendError<DeviceUpdatePayload>>;
 }
 
-impl Serialize for DevicePowerStatus {
-    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        let mut s = serializer.serialize_struct("StatusFile", 2)?;
-        let code = match self {
-            Self::Loading => "LOADING",
-            Self::Error(_) => "ERROR",
-            Self::PoweredOn => "POWERED_ON",
-            Self::PoweredOff => "POWERED_OFF",
-            Self::PowerAcknowledged => "POWER_ACKNOWLEDGED",
-            Self::PowerPending => "POWER_PENDING",
-            Self::PowerInitiated => "POWER_INITIATED",
-            Self::Unknown(_) => "POWER_UNKNOWN",
-        };
-        let detail = match self {
-            Self::Error(msg) => Some(msg.to_string()),
-            Self::Unknown(bytes) => Some(format!("{bytes:?}").to_string()),
-            _ => None,
-        };
-        s.serialize_field("code", code)?;
-        s.serialize_field("detail", &detail)?;
-        s.end()
+#[async_trait]
+impl SendDeviceStatus for Sender<DeviceUpdatePayload> {
+    async fn send_device_statuses(
+        &self,
+        device: &Device,
+        local: DeviceLocalStatus,
+        remote: DeviceRemoteStatus,
+    ) -> Result<(), SendError<DeviceUpdatePayload>> {
+        self.send(DeviceUpdatePayload::from_device_statuses(
+            device, local, remote,
+        ))
+        .await
+    }
+
+    async fn send_device_local_status(
+        &self,
+        device: &Device,
+        status: DeviceLocalStatus,
+    ) -> Result<(), SendError<DeviceUpdatePayload>> {
+        self.send(DeviceUpdatePayload::from_device_local_status(
+            device, status,
+        ))
+        .await
+    }
+
+    async fn send_device_remote_status(
+        &self,
+        device: &Device,
+        status: DeviceRemoteStatus,
+    ) -> Result<(), SendError<DeviceUpdatePayload>> {
+        self.send(DeviceUpdatePayload::from_device_remote_status(
+            device, status,
+        ))
+        .await
     }
 }
 
-impl From<Vec<u8>> for DevicePowerStatus {
+pub enum DeviceCommand {
+    Sleep,
+    Activate,
+    Standby,
+}
+
+impl From<DeviceCommand> for &[u8] {
+    fn from(value: DeviceCommand) -> Self {
+        match value {
+            DeviceCommand::Sleep => &[0x00],
+            DeviceCommand::Activate => &[0x01],
+            DeviceCommand::Standby => &[0x02],
+        }
+    }
+}
+
+impl Display for DeviceCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            DeviceCommand::Activate => "ACTIVATE",
+            DeviceCommand::Sleep => "SLEEP",
+            DeviceCommand::Standby => "STANDBY",
+        };
+        write!(f, "{str}")
+    }
+}
+
+#[derive(Clone)]
+pub enum DeviceRemoteStatus {
+    Stopped,
+    Initiated,
+    Standby,
+    Acknowledged,
+    Spinup,
+    Active,
+    Unknown(Vec<u8>),
+}
+
+impl Debug for DeviceRemoteStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Stopped => write!(f, "00"),
+            Self::Initiated => write!(f, "01"),
+            Self::Standby => write!(f, "02"),
+            Self::Acknowledged => write!(f, "08"),
+            Self::Spinup => write!(f, "09"),
+            Self::Active => write!(f, "0B"),
+            Self::Unknown(bytes) => write!(
+                f,
+                "{}",
+                bytes.iter().fold(String::new(), |mut result, byte| {
+                    write!(result, "{byte:02X}").expect("Writing to string must not fail");
+                    result
+                })
+            ),
+        }
+    }
+}
+
+impl Serialize for DeviceRemoteStatus {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        serializer.serialize_str(&format!("{self:?}"))
+    }
+}
+
+impl From<Vec<u8>> for DeviceRemoteStatus {
     fn from(value: Vec<u8>) -> Self {
         if value.len() != 1 {
             return Self::Unknown(value);
         };
         match value.first().unwrap() {
-            0 => Self::PoweredOff,
-            1 => Self::PowerInitiated,
-            8 => Self::PowerAcknowledged,
-            9 => Self::PowerPending,
-            11 => Self::PoweredOn,
+            0x00 => Self::Stopped,
+            0x01 => Self::Initiated,
+            0x02 => Self::Standby,
+            0x08 => Self::Acknowledged,
+            0x09 => Self::Spinup,
+            0x0B => Self::Active,
             _ => Self::Unknown(value),
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum DeviceLocalStatus {
+    Initializing,
+    Disconnected,
+    Connected,
+    Ignored,
+    FailConnection,
+    FailVerify,
+    Error(String),
+}
+
+impl Display for DeviceLocalStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            Self::Initializing => "INITIALIZING".into(),
+            Self::Disconnected => "DISCONNECTED".into(),
+            Self::Connected => "CONNECTED".into(),
+            Self::Ignored => "IGNORED".into(),
+            Self::FailConnection => "FAIL_CONNECTION".into(),
+            Self::FailVerify => "FAIL_VERIFY".into(),
+            Self::Error(str) => str.clone(),
+        };
+        write!(f, "{str}")
+    }
+}
+
+impl Serialize for DeviceLocalStatus {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
     }
 }

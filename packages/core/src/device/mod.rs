@@ -9,7 +9,7 @@ use tokio::sync::mpsc::Sender;
 
 use crate::{
     constants::{LHV2_GATT_POWER_CHARACTERISTIC, LHV2_GATT_POWER_SERVICE},
-    DevicePowerStatus,
+    DeviceCommand, DeviceRemoteStatus,
 };
 
 #[derive(Clone, Debug)]
@@ -17,20 +17,6 @@ pub struct Device {
     peripheral: Peripheral,
     name: String,
     characteristic: Arc<Mutex<Option<Characteristic>>>,
-}
-
-pub enum PowerCommand {
-    TurnOn,
-    TurnOff,
-}
-
-impl From<PowerCommand> for &[u8] {
-    fn from(value: PowerCommand) -> Self {
-        match value {
-            PowerCommand::TurnOff => &[0],
-            PowerCommand::TurnOn => &[1],
-        }
-    }
 }
 
 impl Device {
@@ -56,8 +42,8 @@ impl Device {
 
     pub async fn power_set(
         &self,
-        tx: Sender<DevicePowerStatus>,
-        command: PowerCommand,
+        tx: Sender<DeviceRemoteStatus>,
+        command: DeviceCommand,
     ) -> crate::Result<()> {
         self.ensure_connected().await?;
         let characteristic = self.get_power_characteristic().await?;
@@ -68,12 +54,14 @@ impl Device {
             .write(&characteristic, command.into(), WriteType::WithResponse)
             .await?;
         while let Some(event) = events.next().await {
-            let power = DevicePowerStatus::from(event.value);
+            let remote = DeviceRemoteStatus::from(event.value);
             let stop = matches!(
-                power,
-                DevicePowerStatus::PoweredOn | DevicePowerStatus::PoweredOff
+                remote,
+                DeviceRemoteStatus::Active
+                    | DeviceRemoteStatus::Standby
+                    | DeviceRemoteStatus::Stopped
             );
-            tx.send(power).await?;
+            tx.send(remote).await?;
             if stop {
                 break;
             }
@@ -99,10 +87,10 @@ impl Device {
             .expect("Device disconnect should never error");
     }
 
-    pub async fn get_device_status(&self) -> crate::Result<DevicePowerStatus> {
+    pub async fn get_device_remote_status(&self) -> crate::Result<DeviceRemoteStatus> {
         let char = self.get_power_characteristic().await?;
         let bytes = self.peripheral.read(&char).await?;
-        Ok(DevicePowerStatus::from(bytes))
+        Ok(DeviceRemoteStatus::from(bytes))
     }
 
     pub async fn get_power_characteristic(&self) -> crate::Result<Characteristic> {

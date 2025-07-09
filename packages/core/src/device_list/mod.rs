@@ -4,7 +4,7 @@ use btleplug::{
     api::{Central, CentralEvent, Peripheral as _, ScanFilter},
     platform::{Adapter, PeripheralId},
 };
-use futures::StreamExt;
+use futures::{StreamExt, TryFutureExt};
 use tokio::{
     sync::{
         mpsc::{channel, Receiver, Sender},
@@ -13,7 +13,9 @@ use tokio::{
     time::sleep,
 };
 
-use crate::{device::Device, get_default_adapter, DevicePowerStatus, DeviceUpdatePayload};
+use crate::{
+    device::Device, get_default_adapter, DeviceLocalStatus, DeviceUpdatePayload, SendDeviceStatus,
+};
 
 /// All clones share the same reference pointers
 #[derive(Clone, Debug)]
@@ -77,29 +79,59 @@ async fn handle_dicovered_device(
         return Ok(());
     }
     let peripheral = list.get_adapter().peripheral(&id).await?;
-    let Some(name) = peripheral
+    let maybe_name = peripheral
         .properties()
-        .await?
-        .and_then(|props| props.local_name)
+        .await
+        .unwrap_or(None)
+        .and_then(|props| props.local_name);
+    let valid_name = maybe_name
+        .clone()
         .and_then(|name| match name.starts_with("LHB-") {
             true => Some(name),
             false => None,
-        })
-    else {
+        });
+    let Some(name) = valid_name else {
+        let addr = peripheral.address().to_string();
+        let _ = tx
+            .send(DeviceUpdatePayload {
+                id,
+                name: maybe_name.unwrap_or(format!("[{addr}]")),
+                addr,
+                local: Some(DeviceLocalStatus::Ignored),
+                remote: None,
+            })
+            .await;
         return Ok(());
     };
 
     let device = Device::new(peripheral.clone(), name.clone());
     list.map.lock().await.insert(id, device.clone());
-    tx.send(DeviceUpdatePayload::from_device(
-        &device,
-        DevicePowerStatus::Loading,
-    ))
-    .await?;
-    device.ensure_connected().await?;
-    let power = device.get_device_status().await?;
-    tx.send(DeviceUpdatePayload::from_device(&device, power))
-        .await?;
 
+    let _ = tx
+        .send_device_local_status(&device, DeviceLocalStatus::Initializing)
+        .await;
+    device
+        .ensure_connected()
+        .or_else(async |err| {
+            let _ = tx
+                .send_device_local_status(&device, DeviceLocalStatus::FailConnection)
+                .await;
+            Err(err)
+        })
+        .await?;
+    let remote = device
+        .get_device_remote_status()
+        .or_else(async |err| {
+            let _ = tx
+                .send_device_local_status(&device, DeviceLocalStatus::FailVerify)
+                .await;
+            Err(err)
+        })
+        .await?;
+    tx.send_device_remote_status(&device, remote).await?;
+    device.disconnect().await;
+    let _ = tx
+        .send_device_local_status(&device, DeviceLocalStatus::Disconnected)
+        .await;
     Ok(())
 }

@@ -52,11 +52,7 @@ pub fn run() {
             app.manage(AppState::default());
             Ok(())
         })
-        .invoke_handler(generate_handler![
-            commands::discover,
-            commands::power_on,
-            commands::power_off,
-        ])
+        .invoke_handler(generate_handler![commands::discover, commands::power])
         .build(generate_context!())
         .expect("Error occured while building application!")
         .run(|handle, event| {

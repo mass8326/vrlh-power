@@ -3,41 +3,38 @@
   import { listen } from "@tauri-apps/api/event";
   import * as remeda from "remeda";
   import { onMount } from "svelte";
-  import { SvelteMap, SvelteSet } from "svelte/reactivity";
+  import { SvelteMap } from "svelte/reactivity";
   import { slide } from "svelte/transition";
-  import loadingSvg from "$lib/icons/loading.svg?raw";
-  import toggleSvg from "$lib/icons/power.svg?raw";
+  import play from "$lib/icons/mingcute--play-fill.svg?raw";
+  import pause from "$lib/icons/mingcute--pause-fill.svg?raw";
+  import stop from "$lib/icons/mingcute--stop-fill.svg?raw";
   import { status } from "$lib/status.svelte";
 
-  type DevicePowerCode =
-    | "LOADING"
-    | "ERROR"
-    | "POWERED_ON"
-    | "POWERED_OFF"
-    | "POWER_PENDING"
-    | "POWER_INITIATED"
-    | "POWER_UNKNOWN";
-
-  interface DeviceUpdatePayload {
+  interface Device {
     /** Serializes differently per platorm */
     id: unknown;
     /** Should be consistent across platorms */
     addr: string;
     name: string;
-    power: { code: DevicePowerCode; detail: string | null };
+    local?: string;
+    remote?: string;
   }
 
   let pending = $state(true);
-  const powering = new SvelteSet<string>();
-  const devices = new SvelteMap<string, DeviceUpdatePayload>();
+  const devices = new SvelteMap<string, Device>();
 
   onMount(() => {
     const cleanup: (() => void)[] = [];
     void discover();
-    void listen<DeviceUpdatePayload>("device-update", ({ payload }) => {
+    void listen<Device>("device-update", ({ payload }) => {
+      console.log({ payload });
       const existing = devices.get(payload.addr);
       if (!existing) status.push(`Discovered "${payload.name}"`);
-      devices.set(payload.addr, payload);
+      devices.set(payload.addr, {
+        ...payload,
+        local: payload.local ?? existing?.local,
+        remote: payload.remote ?? existing?.remote,
+      });
     }).then((unlisten) => cleanup.push(unlisten));
     return () => {
       for (const fn of cleanup) fn();
@@ -54,52 +51,44 @@
     }
   }
 
-  const toggles = new Map<DevicePowerCode, string>([
-    ["POWERED_ON", "power_off"],
-    ["POWERED_OFF", "power_on"],
-  ]);
-
-  function createOnclick(device: DeviceUpdatePayload): () => void {
+  function createOnclick(id: unknown, cmd: number): () => void {
     return function onclick() {
-      if (!device) return;
-      const { id, power } = device;
-      const command = toggles.get(power.code);
-      if (!command) return;
-      powering.add(device.addr);
-      invoke(command, { id })
-        .catch((err: unknown) => {
-          status.push(JSON.stringify(err));
-        })
-        .finally(() => {
-          powering.delete(device.addr);
-        });
+      invoke("power", { id, cmd }).catch((err: unknown) => {
+        status.push(JSON.stringify(err));
+      });
     };
   }
 
-  function getAction(power: DevicePowerCode): string {
-    switch (power) {
-      case "POWERED_ON":
-        return "Turn Off";
-      case "POWERED_OFF":
-        return "Turn On";
-      default:
-        return "Unavailable";
-    }
-  }
+  const arr = $derived(
+    remeda.pipe(
+      [...devices.values()],
+      remeda.filter(({ local }) => local !== "IGNORED"),
+      remeda.sortBy(remeda.prop("name")),
+    ),
+  );
 
-  function getColors(device: DeviceUpdatePayload): string | undefined {
-    if (powering.has(device.addr)) return;
-    switch (device.power.code) {
-      case "POWERED_ON":
-        return "bg-blue-900 b-blue-950 hover:(bg-red-700 b-red-800)";
-      case "POWERED_OFF":
-        return "bg-red-900 b-red-950 hover:(bg-blue-700 b-blue-800)";
+  function localizeRemoteStatus(device: Device) {
+    switch (device.remote) {
+      case "00":
+        return "STOPPED";
+      case "01":
+        return "INITIATED";
+      case "02":
+        return "STANDBY";
+      case "08":
+        return "ACKNOWLEDGED";
+      case "09":
+        return "SPINUP";
+      case "0B":
+        return "ACTIVE";
+      default:
+        return device.local ?? "[UNAVAILABLE]";
     }
   }
 </script>
 
 <div class="h-full flex flex-col justify-between">
-  <main class="p-4 space-y-4 min-h-0 flex-1 overflow-auto">
+  <main class="p-2 space-y-2 min-h-0 flex-1 overflow-auto">
     <div class="flex gap-4 items-center">
       <button
         class={[
@@ -113,41 +102,62 @@
         Refresh
       </button>
     </div>
-    <ul class="flex flex-col gap-4">
-      {#each remeda.sortBy([...devices.values()], (device) => device.name) as device (device.addr)}
-        {@const { addr, name, power } = device}
-        {@const action = getAction(power.code)}
-        {@const colors = getColors(device)}
+    <ul class="flex flex-col gap-2">
+      {#each arr as device (device.addr)}
+        {@const { id, addr, name, local, remote } = device}
+        {@const disabled = local !== "DISCONNECTED"}
         <li
-          class="p-4 flex justify-between b-(1 black) bg-neutral-800 rounded font-mono"
+          class="p-2 pl-3 flex justify-between b-(1 black) bg-neutral-800 rounded font-mono"
           transition:slide
         >
           <div>
-            <h3 class="text-3xl font-bold">
-              {name}
-            </h3>
+            <div class="flex gap-2 items-center">
+              <h3 class="text-3xl font-bold">
+                {name}
+              </h3>
+              {#if disabled}
+                <div
+                  class={[
+                    "h-2 w-2 rounded-full animate-pulse",
+                    local === "INITIALIZING"
+                      ? "bg-yellow-800"
+                      : local === "CONNECTED"
+                        ? "bg-blue-800"
+                        : "bg-red-800",
+                  ]}
+                  title={localizeRemoteStatus(device)}
+                ></div>
+              {/if}
+            </div>
             <div class="-mt-1 text-sm font-italic">
               {addr}
             </div>
-            <div class="mt-2">
-              {power.code}
-              {#if power.detail}({JSON.stringify(power.detail)}){/if}
-            </div>
           </div>
-          <button
-            class={[
-              "px-4 py-2 b-1 rounded transition-colors",
-              "disabled:(b-black bg-neutral-900 cursor-not-allowed)",
-              colors,
-            ]}
-            disabled={colors ? undefined : true}
-            onclick={createOnclick(device)}
-            title={action}
+          <div
+            class="flex b-(1 black) rounded divide-(x-1 black) overflow-hidden"
           >
-            <div class={[colors ? undefined : "animate-spin"]}>
-              {@html colors ? toggleSvg : loadingSvg}
-            </div>
-          </button>
+            {@render command({
+              device: id,
+              cmd: 0,
+              icon: stop,
+              disabled,
+              active: remote === "00",
+            })}
+            {@render command({
+              device: id,
+              cmd: 2,
+              icon: pause,
+              disabled,
+              active: remote === "02",
+            })}
+            {@render command({
+              device: id,
+              cmd: 1,
+              icon: play,
+              disabled,
+              active: remote === "01",
+            })}
+          </div>
         </li>
       {/each}
       {#if !pending && devices.size === 0}
@@ -161,3 +171,25 @@
     {status.current}
   </footer>
 </div>
+
+{#snippet command(opts: {
+  device: unknown;
+  class?: string;
+  disabled?: boolean;
+  active?: boolean;
+  icon: string;
+  cmd: number;
+})}
+  <button
+    class={[
+      "h-full p-2 transition-colors bg-neutral-900 hover:bg-neutral-700",
+      "disabled:(bg-neutral-950 cursor-not-allowed data-[active]:bg-neutral-700)",
+      opts.class,
+    ]}
+    disabled={opts.disabled || opts.active || undefined}
+    data-active={opts.active || undefined}
+    onclick={createOnclick(opts.device, opts.cmd)}
+  >
+    {@html opts.icon}
+  </button>
+{/snippet}

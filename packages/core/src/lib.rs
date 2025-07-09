@@ -9,7 +9,7 @@ use btleplug::{
     platform::{Adapter, Manager},
 };
 
-pub use device::{Device, PowerCommand};
+pub use device::Device;
 pub use device_list::DeviceList;
 pub use dto::*;
 pub use error::*;
