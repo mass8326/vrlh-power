@@ -28,7 +28,6 @@
     void discover();
     void listen<Device>("device-update", ({ payload }) => {
       const existing = devices.get(payload.addr);
-      if (!existing) status.push(`Discovered "${payload.name}"`);
       devices.set(payload.addr, {
         ...payload,
         local: payload.local ?? existing?.local,
