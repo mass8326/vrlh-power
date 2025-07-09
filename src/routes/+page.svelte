@@ -27,7 +27,6 @@
     const cleanup: (() => void)[] = [];
     void discover();
     void listen<Device>("device-update", ({ payload }) => {
-      console.log({ payload });
       const existing = devices.get(payload.addr);
       if (!existing) status.push(`Discovered "${payload.name}"`);
       devices.set(payload.addr, {
@@ -155,7 +154,7 @@
               cmd: 1,
               icon: play,
               disabled,
-              active: remote === "01",
+              active: remote === "0B",
             })}
           </div>
         </li>

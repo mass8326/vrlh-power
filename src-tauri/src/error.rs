@@ -11,6 +11,8 @@ pub enum Error {
     VrlhCore(#[from] vrlh_power_manager_core::Error),
     #[error("{}", .0)]
     Tauri(#[from] tauri::Error),
+    #[error("{}", .0)]
+    Join(#[from] tokio::task::JoinError),
 }
 
 impl Serialize for Error {

@@ -59,7 +59,7 @@ impl DeviceList {
                 if let CentralEvent::DeviceDiscovered(id) = evt {
                     let future = handle_dicovered_device(devices.clone(), tx.clone(), id);
                     tokio::spawn(future);
-                };
+                }
             }
             adapter.stop_scan().await?;
 
@@ -112,6 +112,12 @@ async fn handle_dicovered_device(
         .await;
     device
         .ensure_connected()
+        .and_then(async |()| {
+            let _ = tx
+                .send_device_local_status(&device, DeviceLocalStatus::Connected)
+                .await;
+            Ok(())
+        })
         .or_else(async |err| {
             let _ = tx
                 .send_device_local_status(&device, DeviceLocalStatus::FailConnection)
@@ -129,9 +135,11 @@ async fn handle_dicovered_device(
         })
         .await?;
     tx.send_device_remote_status(&device, remote).await?;
-    device.disconnect().await;
-    let _ = tx
-        .send_device_local_status(&device, DeviceLocalStatus::Disconnected)
-        .await;
+    let disconnected = device.disconnect().await;
+    let status = match disconnected {
+        Ok(()) => DeviceLocalStatus::Disconnected,
+        Err(_) => DeviceLocalStatus::FailConnection,
+    };
+    let _ = tx.send_device_local_status(&device, status).await;
     Ok(())
 }

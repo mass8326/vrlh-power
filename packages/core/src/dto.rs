@@ -182,7 +182,7 @@ impl From<Vec<u8>> for DeviceRemoteStatus {
     fn from(value: Vec<u8>) -> Self {
         if value.len() != 1 {
             return Self::Unknown(value);
-        };
+        }
         match value.first().unwrap() {
             0x00 => Self::Stopped,
             0x01 => Self::Initiated,

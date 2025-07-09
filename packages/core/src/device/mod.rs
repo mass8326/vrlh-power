@@ -70,21 +70,21 @@ impl Device {
         self.peripheral
             .unsubscribe(&characteristic)
             .await
-            .map_err(|_| crate::Error::Vrlh("Could not unsubscribe from device"))
+            .map_err(|_| crate::Error::Vrlh("Could not unsubscribe from device"))?;
+        self.disconnect().await?;
+        Ok(())
     }
 
     pub async fn ensure_connected(&self) -> crate::Result<()> {
         if !self.peripheral.is_connected().await? {
             self.peripheral.connect().await?;
-        };
+        }
         Ok(())
     }
 
-    pub async fn disconnect(&self) {
-        self.peripheral
-            .disconnect()
-            .await
-            .expect("Device disconnect should never error");
+    pub async fn disconnect(&self) -> crate::Result<()> {
+        self.peripheral.disconnect().await?;
+        Ok(())
     }
 
     pub async fn get_device_remote_status(&self) -> crate::Result<DeviceRemoteStatus> {
