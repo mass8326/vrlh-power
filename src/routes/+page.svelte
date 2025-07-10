@@ -16,7 +16,7 @@
 
   onMount(() => {
     const cleanup: (() => void)[] = [];
-    void discover();
+    void discover(5);
     void listen<DeviceInfo>("device-update", ({ payload }) => {
       const existing = devices.get(payload.addr);
       devices.set(payload.addr, {
@@ -30,11 +30,11 @@
     };
   });
 
-  async function discover(seconds?: number) {
+  async function discover(duration: number) {
     pending = true;
     devices.clear();
     try {
-      await invoke("discover", { duration: seconds ?? 15 });
+      await invoke("discover", { duration });
     } finally {
       pending = false;
     }
@@ -65,7 +65,7 @@
         "hover:(bg-blue-700 b-blue-800)",
         "disabled:(b-black bg-neutral-900 cursor-not-allowed)",
       ]}
-      onclick={() => discover(30)}
+      onclick={() => discover(10)}
       disabled={pending || undefined}
     >
       Refresh

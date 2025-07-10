@@ -55,7 +55,7 @@ impl DeviceList {
             adapter.start_scan(ScanFilter::default()).await?;
             while let Some(evt) = stream.next().await {
                 if let CentralEvent::DeviceDiscovered(id) = evt {
-                    let future = handle_dicovered_device(devices.clone(), tx.clone(), id);
+                    let future = handle_discovered_device(devices.clone(), tx.clone(), id);
                     tokio::spawn(future);
                 }
             }
@@ -68,7 +68,7 @@ impl DeviceList {
     }
 }
 
-async fn handle_dicovered_device(
+async fn handle_discovered_device(
     list: DeviceList,
     tx: Sender<DeviceInfo>,
     id: PeripheralId,
