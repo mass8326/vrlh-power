@@ -3,7 +3,7 @@ use tauri::{AppHandle, Emitter};
 use vrlh_power_manager_core::DeviceInfo;
 
 #[derive(Clone, Debug, Serialize)]
-struct StatusPayload(String);
+pub struct StatusPayload(String);
 
 impl StatusPayload {
     pub fn new(msg: String) -> Self {
@@ -11,18 +11,18 @@ impl StatusPayload {
     }
 }
 
-pub trait EventEmitter {
-    fn emit_device_update(&self, payload: DeviceInfo) -> crate::Result<()>;
-    fn emit_status(&self, payload: String) -> crate::Result<()>;
+pub trait EmitEvent<T> {
+    fn emit_event(&self, payload: T) -> crate::Result<()>;
 }
 
-impl EventEmitter for AppHandle {
-    fn emit_device_update(&self, payload: DeviceInfo) -> crate::Result<()> {
+impl EmitEvent<DeviceInfo> for AppHandle {
+    fn emit_event(&self, payload: DeviceInfo) -> crate::Result<()> {
         self.emit("device-update", payload).map_err(Into::into)
     }
+}
 
-    fn emit_status(&self, msg: String) -> crate::Result<()> {
-        self.emit("status", StatusPayload::new(msg))
-            .map_err(Into::into)
+impl EmitEvent<StatusPayload> for AppHandle {
+    fn emit_event(&self, payload: StatusPayload) -> crate::Result<()> {
+        self.emit("status", payload).map_err(Into::into)
     }
 }

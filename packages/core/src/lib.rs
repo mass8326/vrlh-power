@@ -3,6 +3,7 @@ mod device;
 mod device_list;
 mod dto;
 mod error;
+mod traits;
 
 use btleplug::{
     api::Manager as _,
@@ -13,6 +14,7 @@ pub use device::Device;
 pub use device_list::DeviceList;
 pub use dto::*;
 pub use error::*;
+pub use traits::*;
 
 pub async fn get_default_adapter() -> crate::Result<Adapter> {
     Manager::new()

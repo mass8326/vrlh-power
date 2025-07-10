@@ -9,7 +9,8 @@ use tokio::sync::mpsc::Sender;
 
 use crate::{
     constants::{LHV2_GATT_POWER_CHARACTERISTIC, LHV2_GATT_POWER_SERVICE},
-    DeviceCommand, DeviceInfo, DeviceLocalStatus, DeviceRemoteStatus, SendDeviceStatus,
+    traits::SendDeviceStatus,
+    DeviceCommand, DeviceInfo, DeviceLocalStatus, DeviceRemoteStatus,
 };
 
 #[derive(Clone, Debug)]
@@ -48,7 +49,6 @@ impl Device {
         command: DeviceCommand,
     ) -> crate::Result<()> {
         self.ensure_connected(tx.clone()).await?;
-        let tx_clone = tx.clone();
         let result = self
             .get_power_characteristic()
             .and_then(async |char| {
@@ -69,24 +69,26 @@ impl Device {
                                 | DeviceRemoteStatus::Standby
                                 | DeviceRemoteStatus::Stopped
                         );
-                        let _ = tx_clone.send_device_remote_status(self, remote).await;
+                        let _ = tx.send_device_status(self, remote).await;
                         if stop {
                             break;
                         }
                     }
                 } else {
-                    let _ = tx_clone
-                        .send_device_local_status(self, DeviceLocalStatus::FailVerify)
+                    let _ = tx
+                        .send_device_status(self, DeviceLocalStatus::FailVerify)
                         .await;
                 }
                 Ok::<(), crate::Error>(())
             })
             .await;
-        let disconnect_status = match self.disconnect().await {
+
+        let disconnected = match self.disconnect().await {
             Ok(()) => DeviceLocalStatus::Disconnected,
             Err(_) => DeviceLocalStatus::FailConnection,
         };
-        let _ = tx.send_device_local_status(self, disconnect_status).await;
+        let _ = tx.send_device_status(self, disconnected).await;
+
         result
     }
 
@@ -98,13 +100,13 @@ impl Device {
             .connect()
             .and_then(async |()| {
                 let _ = tx
-                    .send_device_local_status(self, DeviceLocalStatus::Connected)
+                    .send_device_status(self, DeviceLocalStatus::Connected)
                     .await;
                 Ok(())
             })
             .or_else(async |error| {
                 let _ = tx
-                    .send_device_local_status(self, DeviceLocalStatus::FailConnection)
+                    .send_device_status(self, DeviceLocalStatus::FailConnection)
                     .await;
                 Err(error)
             })
@@ -132,7 +134,7 @@ impl Device {
 
     pub async fn fetch_remote_status(&self, tx: Sender<DeviceInfo>) -> crate::Result<()> {
         let _ = tx
-            .send_device_local_status(self, DeviceLocalStatus::Initializing)
+            .send_device_status(self, DeviceLocalStatus::Initializing)
             .await;
         self.ensure_connected(tx.clone()).await?;
         let result = self
@@ -140,7 +142,7 @@ impl Device {
             .and_then(async |char| self.peripheral.read(&char).await.map_err(Into::into))
             .and_then(async |bytes| {
                 let _ = tx
-                    .send_device_remote_status(self, DeviceRemoteStatus::from(bytes))
+                    .send_device_status(self, DeviceRemoteStatus::from(bytes))
                     .await;
                 Ok(())
             })
@@ -149,7 +151,7 @@ impl Device {
             Ok(()) => DeviceLocalStatus::Disconnected,
             Err(_) => DeviceLocalStatus::FailConnection,
         };
-        let _ = tx.send_device_local_status(self, disconnect_status).await;
+        let _ = tx.send_device_status(self, disconnect_status).await;
         result
     }
 

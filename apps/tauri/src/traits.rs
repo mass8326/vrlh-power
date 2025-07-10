@@ -1,22 +1,18 @@
 use tauri::AppHandle;
-use vrlh_power_manager_core::{Device, DeviceInfo, DeviceLocalStatus, DeviceRemoteStatus};
+use vrlh_power_manager_core::{Device, DeviceInfo, FromDeviceStatus};
 
-use crate::events::EventEmitter;
+use crate::events::EmitEvent;
 
-pub trait EmitAppDeviceEvent {
-    async fn emit(self, app: &AppHandle, device: &Device) -> crate::Result<()>;
+pub trait EmitDeviceStatus<T> {
+    fn emit_device(&self, device: &Device, status: T) -> crate::Result<()>;
 }
 
-impl EmitAppDeviceEvent for DeviceLocalStatus {
-    async fn emit(self, app: &AppHandle, device: &Device) -> crate::Result<()> {
-        let info = DeviceInfo::from_device_local_status(device, self);
-        app.emit_device_update(info)
-    }
-}
-
-impl EmitAppDeviceEvent for DeviceRemoteStatus {
-    async fn emit(self, app: &AppHandle, device: &Device) -> crate::Result<()> {
-        let info = DeviceInfo::from_device_remote_status(device, self);
-        app.emit_device_update(info)
+impl<T> EmitDeviceStatus<T> for AppHandle
+where
+    DeviceInfo: FromDeviceStatus<T>,
+{
+    fn emit_device(&self, device: &Device, status: T) -> crate::Result<()> {
+        let info = DeviceInfo::from_device_status(device, status);
+        self.emit_event(info)
     }
 }

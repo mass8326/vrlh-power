@@ -1,7 +1,10 @@
 use tauri::{AppHandle, Manager as _};
 use vrlh_power_manager_core::{DeviceInfo, DeviceList};
 
-use crate::{events::EventEmitter, AppState};
+use crate::{
+    events::{EmitEvent, StatusPayload},
+    AppState,
+};
 
 #[tauri::command(async)]
 pub async fn discover(app: AppHandle, duration: u64) -> crate::Result<()> {
@@ -10,7 +13,8 @@ pub async fn discover(app: AppHandle, duration: u64) -> crate::Result<()> {
         // Initialize device list if not yet initialized
         None => {
             let init = DeviceList::init().await.inspect_err(|_| {
-                let _ = app.emit_status("No bluetooth adapter available!".into());
+                let _ =
+                    app.emit_event(StatusPayload::new("No bluetooth adapter available!".into()));
             })?;
             let mut guard = state
                 .devices
@@ -33,18 +37,18 @@ pub async fn discover(app: AppHandle, duration: u64) -> crate::Result<()> {
             {
                 let (local, remote) = device.get_last_statuses();
                 let info = DeviceInfo::from_device_statuses(device, local, remote);
-                let _ = app.emit_device_update(info);
+                let _ = app.emit_event(info);
             }
             list
         }
     };
 
-    let _ = app.emit_status("Scanning for lighthouses...".into());
+    let _ = app.emit_event(StatusPayload::new("Scanning for lighthouses...".into()));
     let mut rx = devices.start_scan(duration)?;
     while let Some(payload) = rx.recv().await {
-        let _ = app.emit_device_update(payload);
+        let _ = app.emit_event(payload);
     }
 
-    let _ = app.emit_status("Done scanning for devices!".into());
+    let _ = app.emit_event(StatusPayload::new("Done scanning for devices!".into()));
     Ok(())
 }
