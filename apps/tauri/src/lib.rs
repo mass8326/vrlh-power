@@ -31,23 +31,16 @@ impl AppState {
         ))
     }
 
-    async fn assert_device(&self, id: &PeripheralId) -> crate::Result<Device> {
+    fn assert_device(&self, id: &PeripheralId) -> crate::Result<Device> {
         self.assert_devices()?
             .get_device(id)
-            .await
             .ok_or(crate::Error::VrlhApp(format!("Device '{id}' not found!")))
-    }
-
-    async fn disconnect_all(&self) {
-        let current = self.get_devices();
-        if let Some(existing) = current {
-            let map = existing.get_device_map();
-            let guard = map.lock().await;
-            join_all(guard.values().map(Device::disconnect)).await;
-        }
     }
 }
 
+// Async unaware mutex guard for devices is held across an await
+// But it's fine since the program is shutting down
+#[allow(clippy::await_holding_lock)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     Builder::default()
@@ -62,7 +55,14 @@ pub fn run() {
         .run(|handle, event| {
             if let RunEvent::ExitRequested { .. } = &event {
                 let state = handle.state::<AppState>();
-                block_on(async move { state.disconnect_all().await });
+                block_on(async move {
+                    let current = state.get_devices();
+                    if let Some(existing) = current {
+                        let map = existing.get_device_map();
+                        let guard = map.lock().expect("Device map mutex must not be poisoned");
+                        join_all(guard.values().map(Device::disconnect)).await;
+                    }
+                });
             }
         });
 }

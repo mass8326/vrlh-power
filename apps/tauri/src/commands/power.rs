@@ -21,7 +21,7 @@ async fn handle_power_command(
     command: DeviceCommand,
 ) -> crate::Result<()> {
     let state = app.state::<AppState>();
-    let device = state.assert_device(&id).await?;
+    let device = state.assert_device(&id)?;
     let _ = app.emit_device_update(DeviceInfo::from_device_local_status(
         &device,
         DeviceLocalStatus::Initializing,

@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use btleplug::{
     api::{Central, CentralEvent, Peripheral as _, ScanFilter},
@@ -6,10 +10,7 @@ use btleplug::{
 };
 use futures::{StreamExt, TryFutureExt};
 use tokio::{
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        Mutex,
-    },
+    sync::mpsc::{channel, Receiver, Sender},
     time::sleep,
 };
 
@@ -38,8 +39,13 @@ impl DeviceList {
         self.map.clone()
     }
 
-    pub async fn get_device(&self, id: &PeripheralId) -> Option<Device> {
-        self.map.clone().lock().await.get(id).cloned()
+    pub fn get_device(&self, id: &PeripheralId) -> Option<Device> {
+        self.map
+            .clone()
+            .lock()
+            .expect("Device map mutex must not be poisoned")
+            .get(id)
+            .cloned()
     }
 
     pub fn start_scan(&self, duration: u64) -> crate::Result<Receiver<DeviceInfo>> {
@@ -73,7 +79,12 @@ async fn handle_discovered_device(
     tx: Sender<DeviceInfo>,
     id: PeripheralId,
 ) -> crate::Result<()> {
-    if list.map.lock().await.contains_key(&id) {
+    if list
+        .get_device_map()
+        .lock()
+        .expect("Device map mutex must not be poisoned")
+        .contains_key(&id)
+    {
         return Ok(());
     }
     let peripheral = list.get_adapter().peripheral(&id).await?;
@@ -103,7 +114,10 @@ async fn handle_discovered_device(
     };
 
     let device = Device::new(peripheral.clone(), name.clone());
-    list.map.lock().await.insert(id, device.clone());
+    list.map
+        .lock()
+        .expect("Device map mutex must not be poisoned")
+        .insert(id, device.clone());
 
     let _ = tx
         .send_device_local_status(&device, DeviceLocalStatus::Initializing)
