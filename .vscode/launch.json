@@ -8,7 +8,7 @@
       "cargo": {
         "args": [
           "build",
-          "--manifest-path=./src-tauri/Cargo.toml",
+          "--manifest-path=./apps/tauri/Cargo.toml",
           "--no-default-features"
         ]
       },
@@ -19,7 +19,11 @@
       "request": "launch",
       "name": "Tauri Production Debug",
       "cargo": {
-        "args": ["build", "--release", "--manifest-path=./src-tauri/Cargo.toml"]
+        "args": [
+          "build",
+          "--release",
+          "--manifest-path=./apps/tauri/Cargo.toml"
+        ]
       },
       "preLaunchTask": "pnpm:build"
     }

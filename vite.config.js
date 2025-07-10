@@ -22,6 +22,6 @@ export default defineConfig({
           port: 1421,
         }
       : undefined,
-    watch: { ignored: ["**/src-tauri/**", "**/packages/**"] },
+    watch: { ignored: ["**/apps/**", "**/packages/**"] },
   },
 });

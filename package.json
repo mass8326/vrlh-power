@@ -1,5 +1,5 @@
 {
-  "name": "vrlh-power-manager",
+  "name": "@vrlh/workspace",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
