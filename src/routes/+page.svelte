@@ -57,92 +57,90 @@
   );
 </script>
 
-<div class="h-full flex flex-col justify-between">
-  <main class="p-2 space-y-2 min-h-0 flex-1 overflow-auto">
-    <div class="flex gap-4 items-center">
-      <button
-        class={[
-          "px-4 py-2 bg-blue-900 b-(1 blue-950) rounded font-bold transition-colors",
-          "hover:(bg-blue-700 b-blue-800)",
-          "disabled:(b-black bg-neutral-900 cursor-not-allowed)",
-        ]}
-        onclick={() => discover(30)}
-        disabled={pending || undefined}
+<main class="p-2 space-y-2 min-h-0 flex-1 overflow-auto">
+  <div class="flex gap-4 items-center">
+    <button
+      class={[
+        "px-4 py-2 bg-blue-900 b-(1 blue-950) rounded font-bold transition-colors",
+        "hover:(bg-blue-700 b-blue-800)",
+        "disabled:(b-black bg-neutral-900 cursor-not-allowed)",
+      ]}
+      onclick={() => discover(30)}
+      disabled={pending || undefined}
+    >
+      Refresh
+    </button>
+  </div>
+  <ul class="flex flex-col gap-2">
+    {#each arr as device (device.addr)}
+      {@const { id, addr, name, local, remote } = device}
+      {@const disabled = local !== "Disconnected"}
+      <li
+        class="p-2 pl-3 flex justify-between b-(1 black) bg-neutral-800 rounded font-mono"
+        transition:slide
       >
-        Refresh
-      </button>
-    </div>
-    <ul class="flex flex-col gap-2">
-      {#each arr as device (device.addr)}
-        {@const { id, addr, name, local, remote } = device}
-        {@const disabled = local !== "Disconnected"}
-        <li
-          class="p-2 pl-3 flex justify-between b-(1 black) bg-neutral-800 rounded font-mono"
-          transition:slide
+        <div>
+          <div class="flex gap-2 items-center">
+            <h3 class="text-3xl font-bold">
+              {name}
+            </h3>
+            {#if disabled}
+              <div
+                class={[
+                  "h-2 w-2 rounded-full animate-pulse",
+                  local === "Initializing"
+                    ? "bg-yellow-800"
+                    : local === "Connected"
+                      ? "bg-blue-800"
+                      : "bg-red-800",
+                ]}
+                title={typeof device.local === "string"
+                  ? device.local
+                  : device.local && device.local.Error}
+              ></div>
+            {/if}
+          </div>
+          <div class="-mt-1 text-sm font-italic">
+            {addr}
+          </div>
+        </div>
+        <div
+          class="flex b-(1 black) rounded divide-(x-1 black) overflow-hidden"
         >
-          <div>
-            <div class="flex gap-2 items-center">
-              <h3 class="text-3xl font-bold">
-                {name}
-              </h3>
-              {#if disabled}
-                <div
-                  class={[
-                    "h-2 w-2 rounded-full animate-pulse",
-                    local === "Initializing"
-                      ? "bg-yellow-800"
-                      : local === "Connected"
-                        ? "bg-blue-800"
-                        : "bg-red-800",
-                  ]}
-                  title={typeof device.local === "string"
-                    ? device.local
-                    : device.local && device.local.Error}
-                ></div>
-              {/if}
-            </div>
-            <div class="-mt-1 text-sm font-italic">
-              {addr}
-            </div>
-          </div>
-          <div
-            class="flex b-(1 black) rounded divide-(x-1 black) overflow-hidden"
-          >
-            {@render command({
-              device: id,
-              cmd: 0,
-              icon: stop,
-              disabled,
-              active: remote === "Stopped",
-            })}
-            {@render command({
-              device: id,
-              cmd: 2,
-              icon: pause,
-              disabled,
-              active: remote === "Standby",
-            })}
-            {@render command({
-              device: id,
-              cmd: 1,
-              icon: play,
-              disabled,
-              active: remote === "Active",
-            })}
-          </div>
-        </li>
-      {/each}
-      {#if !pending && devices.size === 0}
-        <li class="p-4 b-(1 black) bg-neutral-800 rounded space-y-2">
-          No lighthouses found!
-        </li>
-      {/if}
-    </ul>
-  </main>
-  <footer class="px-4 py-1 bg-neutral-800 b-t-(1 black) font-italic">
-    {status.current}
-  </footer>
-</div>
+          {@render command({
+            device: id,
+            cmd: 0,
+            icon: stop,
+            disabled,
+            active: remote === "Stopped",
+          })}
+          {@render command({
+            device: id,
+            cmd: 2,
+            icon: pause,
+            disabled,
+            active: remote === "Standby",
+          })}
+          {@render command({
+            device: id,
+            cmd: 1,
+            icon: play,
+            disabled,
+            active: remote === "Active",
+          })}
+        </div>
+      </li>
+    {/each}
+    {#if !pending && devices.size === 0}
+      <li class="p-4 b-(1 black) bg-neutral-800 rounded space-y-2">
+        No lighthouses found!
+      </li>
+    {/if}
+  </ul>
+</main>
+<footer class="px-4 py-1 bg-neutral-800 b-t-(1 black) font-italic">
+  {status.current}
+</footer>
 
 {#snippet command(opts: {
   device: unknown;

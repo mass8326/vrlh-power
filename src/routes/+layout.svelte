@@ -7,4 +7,6 @@
   import "./styles.css";
 </script>
 
-<slot />
+<div class="h-full flex flex-col justify-between text-white font-mono">
+  <slot />
+</div>
