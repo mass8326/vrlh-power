@@ -16,7 +16,6 @@ use crate::{
 pub struct Device {
     peripheral: Peripheral,
     name: String,
-    characteristic: Arc<Mutex<Option<Characteristic>>>,
     local: Arc<Mutex<DeviceLocalStatus>>,
     remote: Arc<Mutex<DeviceRemoteStatus>>,
 }
@@ -26,7 +25,6 @@ impl Device {
         Self {
             peripheral,
             name,
-            characteristic: Arc::new(Mutex::new(None)),
             local: Arc::new(Mutex::new(DeviceLocalStatus::Initializing)),
             remote: Arc::new(Mutex::new(DeviceRemoteStatus::Unavailable)),
         }
@@ -46,43 +44,71 @@ impl Device {
 
     pub async fn power_set(
         &self,
-        tx: Sender<DeviceRemoteStatus>,
-        command: &DeviceCommand,
+        tx: Sender<DeviceInfo>,
+        command: DeviceCommand,
     ) -> crate::Result<()> {
-        self.ensure_connected().await?;
-        let characteristic = self.get_power_characteristic().await?;
-        self.peripheral.subscribe(&characteristic).await?;
-        let mut events = self.peripheral.notifications().await?;
-
-        self.peripheral
-            .write(&characteristic, command.into(), WriteType::WithResponse)
-            .await?;
-        while let Some(event) = events.next().await {
-            let remote = DeviceRemoteStatus::from(event.value);
-            let stop = matches!(
-                remote,
-                DeviceRemoteStatus::Active
-                    | DeviceRemoteStatus::Standby
-                    | DeviceRemoteStatus::Stopped
-            );
-            tx.send(remote).await?;
-            if stop {
-                break;
-            }
-        }
-
-        self.peripheral
-            .unsubscribe(&characteristic)
-            .await
-            .map_err(|_| crate::Error::Vrlh("Could not unsubscribe from device"))?;
-        self.disconnect().await?;
-        Ok(())
+        self.ensure_connected(tx.clone()).await?;
+        let tx_clone = tx.clone();
+        let result = self
+            .get_power_characteristic()
+            .and_then(async |char| {
+                let maybe_events = self
+                    .peripheral
+                    .subscribe(&char)
+                    .and_then(|()| self.peripheral.notifications())
+                    .await;
+                self.peripheral
+                    .write(&char, command.into(), WriteType::WithResponse)
+                    .await?;
+                if let Ok(mut events) = maybe_events {
+                    while let Some(event) = events.next().await {
+                        let remote = DeviceRemoteStatus::from(event.value);
+                        let stop = matches!(
+                            remote,
+                            DeviceRemoteStatus::Active
+                                | DeviceRemoteStatus::Standby
+                                | DeviceRemoteStatus::Stopped
+                        );
+                        let _ = tx_clone.send_device_remote_status(self, remote).await;
+                        if stop {
+                            break;
+                        }
+                    }
+                } else {
+                    let _ = tx_clone
+                        .send_device_local_status(self, DeviceLocalStatus::FailVerify)
+                        .await;
+                }
+                Ok::<(), crate::Error>(())
+            })
+            .await;
+        let disconnect_status = match self.disconnect().await {
+            Ok(()) => DeviceLocalStatus::Disconnected,
+            Err(_) => DeviceLocalStatus::FailConnection,
+        };
+        let _ = tx.send_device_local_status(self, disconnect_status).await;
+        result
     }
 
-    pub async fn ensure_connected(&self) -> crate::Result<()> {
-        if !self.peripheral.is_connected().await? {
-            self.peripheral.connect().await?;
+    pub async fn ensure_connected(&self, tx: Sender<DeviceInfo>) -> crate::Result<()> {
+        if self.peripheral.is_connected().await? {
+            return Ok(());
         }
+        self.peripheral
+            .connect()
+            .and_then(async |()| {
+                let _ = tx
+                    .send_device_local_status(self, DeviceLocalStatus::Connected)
+                    .await;
+                Ok(())
+            })
+            .or_else(async |error| {
+                let _ = tx
+                    .send_device_local_status(self, DeviceLocalStatus::FailConnection)
+                    .await;
+                Err(error)
+            })
+            .await?;
         Ok(())
     }
 
@@ -108,22 +134,7 @@ impl Device {
         let _ = tx
             .send_device_local_status(self, DeviceLocalStatus::Initializing)
             .await;
-
-        self.ensure_connected()
-            .and_then(async |()| {
-                let _ = tx
-                    .send_device_local_status(self, DeviceLocalStatus::Connected)
-                    .await;
-                Ok(())
-            })
-            .or_else(async |error| {
-                let _ = tx
-                    .send_device_local_status(self, DeviceLocalStatus::FailConnection)
-                    .await;
-                Err(error)
-            })
-            .await?;
-
+        self.ensure_connected(tx.clone()).await?;
         let result = self
             .get_power_characteristic()
             .and_then(async |char| self.peripheral.read(&char).await.map_err(Into::into))
@@ -134,43 +145,27 @@ impl Device {
                 Ok(())
             })
             .await;
-
         let disconnect_status = match self.disconnect().await {
             Ok(()) => DeviceLocalStatus::Disconnected,
             Err(_) => DeviceLocalStatus::FailConnection,
         };
         let _ = tx.send_device_local_status(self, disconnect_status).await;
-
         result
     }
 
+    /// The characteristic must be used during the same connection session during which it was retrieved
     pub async fn get_power_characteristic(&self) -> crate::Result<Characteristic> {
-        if let Some(existing) = self
-            .characteristic
-            .lock()
-            .map_or(None, |guard| guard.clone())
-        {
-            return Ok(existing);
-        }
         self.peripheral.discover_services().await?;
-        let found = self
+        let service = self
             .peripheral
             .services()
             .into_iter()
             .find(|service| service.uuid == LHV2_GATT_POWER_SERVICE)
-            .ok_or(crate::Error::Vrlh("Could not verify power service!"))
-            .and_then(|service| {
-                service
-                    .characteristics
-                    .into_iter()
-                    .find(|char| char.uuid == LHV2_GATT_POWER_CHARACTERISTIC)
-                    .ok_or(crate::Error::Vrlh("Could not verify power charateristic!"))
-            })?;
-        self.characteristic.clear_poison();
-        *self
-            .characteristic
-            .lock()
-            .expect("Characteristic mutex must not be poisoned") = Some(found.clone());
-        Ok(found)
+            .ok_or(crate::Error::Vrlh("Could not verify power service!"))?;
+        service
+            .characteristics
+            .into_iter()
+            .find(|char| char.uuid == LHV2_GATT_POWER_CHARACTERISTIC)
+            .ok_or(crate::Error::Vrlh("Could not verify power charateristic!"))
     }
 }

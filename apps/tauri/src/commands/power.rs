@@ -30,10 +30,10 @@ async fn handle_power_command(
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
     let device_clone = device.clone();
     let command_clone = command.clone();
-    let handle = tokio::spawn(async move { device_clone.power_set(tx, &command_clone).await });
+    let handle = tokio::spawn(async move { device_clone.power_set(tx, command_clone).await });
 
-    while let Some(remote) = rx.recv().await {
-        let _ = remote.emit(&app, &device).await;
+    while let Some(info) = rx.recv().await {
+        let _ = app.emit_device_update(info);
     }
 
     handle.await??;
