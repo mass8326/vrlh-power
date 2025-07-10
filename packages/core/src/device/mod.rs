@@ -4,12 +4,12 @@ use btleplug::{
     api::{Characteristic, Peripheral as _, WriteType},
     platform::{Peripheral, PeripheralId},
 };
-use futures::StreamExt;
+use futures::{StreamExt, TryFutureExt};
 use tokio::sync::mpsc::Sender;
 
 use crate::{
     constants::{LHV2_GATT_POWER_CHARACTERISTIC, LHV2_GATT_POWER_SERVICE},
-    DeviceCommand, DeviceRemoteStatus,
+    DeviceCommand, DeviceInfo, DeviceLocalStatus, DeviceRemoteStatus, SendDeviceStatus,
 };
 
 #[derive(Clone, Debug)]
@@ -17,6 +17,8 @@ pub struct Device {
     peripheral: Peripheral,
     name: String,
     characteristic: Arc<Mutex<Option<Characteristic>>>,
+    local: Arc<Mutex<DeviceLocalStatus>>,
+    remote: Arc<Mutex<DeviceRemoteStatus>>,
 }
 
 impl Device {
@@ -25,6 +27,8 @@ impl Device {
             peripheral,
             name,
             characteristic: Arc::new(Mutex::new(None)),
+            local: Arc::new(Mutex::new(DeviceLocalStatus::Initializing)),
+            remote: Arc::new(Mutex::new(DeviceRemoteStatus::Unavailable)),
         }
     }
 
@@ -87,10 +91,57 @@ impl Device {
         Ok(())
     }
 
-    pub async fn get_device_remote_status(&self) -> crate::Result<DeviceRemoteStatus> {
-        let char = self.get_power_characteristic().await?;
-        let bytes = self.peripheral.read(&char).await?;
-        Ok(DeviceRemoteStatus::from(bytes))
+    pub fn get_last_statuses(&self) -> (DeviceLocalStatus, DeviceRemoteStatus) {
+        (
+            self.local
+                .lock()
+                .expect("Device local status mutex should not be poisoned")
+                .clone(),
+            self.remote
+                .lock()
+                .expect("Device remote status mutex should not be poisoned")
+                .clone(),
+        )
+    }
+
+    pub async fn fetch_remote_status(&self, tx: Sender<DeviceInfo>) -> crate::Result<()> {
+        let _ = tx
+            .send_device_local_status(self, DeviceLocalStatus::Initializing)
+            .await;
+
+        self.ensure_connected()
+            .and_then(async |()| {
+                let _ = tx
+                    .send_device_local_status(self, DeviceLocalStatus::Connected)
+                    .await;
+                Ok(())
+            })
+            .or_else(async |error| {
+                let _ = tx
+                    .send_device_local_status(self, DeviceLocalStatus::FailConnection)
+                    .await;
+                Err(error)
+            })
+            .await?;
+
+        let result = self
+            .get_power_characteristic()
+            .and_then(async |char| self.peripheral.read(&char).await.map_err(Into::into))
+            .and_then(async |bytes| {
+                let _ = tx
+                    .send_device_remote_status(self, DeviceRemoteStatus::from(bytes))
+                    .await;
+                Ok(())
+            })
+            .await;
+
+        let disconnect_status = match self.disconnect().await {
+            Ok(()) => DeviceLocalStatus::Disconnected,
+            Err(_) => DeviceLocalStatus::FailConnection,
+        };
+        let _ = tx.send_device_local_status(self, disconnect_status).await;
+
+        result
     }
 
     pub async fn get_power_characteristic(&self) -> crate::Result<Characteristic> {

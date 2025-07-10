@@ -140,6 +140,7 @@ impl Display for DeviceCommand {
 #[derive(Clone, Serialize, TS)]
 #[ts(export)]
 pub enum DeviceRemoteStatus {
+    Unavailable,
     Stopped,
     Initiated,
     Standby,
@@ -152,6 +153,7 @@ pub enum DeviceRemoteStatus {
 impl Debug for DeviceRemoteStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Unavailable => write!(f, "--"),
             Self::Stopped => write!(f, "00"),
             Self::Initiated => write!(f, "01"),
             Self::Standby => write!(f, "02"),

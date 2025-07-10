@@ -32,7 +32,6 @@
 
   async function discover(duration: number) {
     pending = true;
-    devices.clear();
     try {
       await invoke("discover", { duration });
     } finally {

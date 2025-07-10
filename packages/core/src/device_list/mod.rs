@@ -8,15 +8,15 @@ use btleplug::{
     api::{Central, CentralEvent, Peripheral as _, ScanFilter},
     platform::{Adapter, PeripheralId},
 };
-use futures::{StreamExt, TryFutureExt};
+use futures::StreamExt;
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::sleep,
 };
 
-use crate::{device::Device, get_default_adapter, DeviceInfo, DeviceLocalStatus, SendDeviceStatus};
+use crate::{device::Device, get_default_adapter, DeviceInfo, DeviceLocalStatus};
 
-/// All clones share the same reference pointers
+/// Can be cloned and will retain references to the same devices
 #[derive(Clone, Debug)]
 pub struct DeviceList {
     adapter: Adapter,
@@ -50,8 +50,19 @@ impl DeviceList {
 
     pub fn start_scan(&self, duration: u64) -> crate::Result<Receiver<DeviceInfo>> {
         let (tx, rx) = channel(1);
-        let devices = self.clone();
 
+        let refresh = self
+            .get_device_map()
+            .lock()
+            .expect("Device map mutex must not be poisoned")
+            .clone()
+            .into_values();
+        for device in refresh {
+            let tx_clone = tx.clone();
+            tokio::spawn(async move { device.fetch_remote_status(tx_clone).await });
+        }
+
+        let devices = self.clone();
         tokio::spawn(async move {
             let adapter = devices.get_adapter();
 
@@ -119,39 +130,7 @@ async fn handle_discovered_device(
         .expect("Device map mutex must not be poisoned")
         .insert(id, device.clone());
 
-    let _ = tx
-        .send_device_local_status(&device, DeviceLocalStatus::Initializing)
-        .await;
-    device
-        .ensure_connected()
-        .and_then(async |()| {
-            let _ = tx
-                .send_device_local_status(&device, DeviceLocalStatus::Connected)
-                .await;
-            Ok(())
-        })
-        .or_else(async |err| {
-            let _ = tx
-                .send_device_local_status(&device, DeviceLocalStatus::FailConnection)
-                .await;
-            Err(err)
-        })
-        .await?;
-    let remote = device
-        .get_device_remote_status()
-        .or_else(async |err| {
-            let _ = tx
-                .send_device_local_status(&device, DeviceLocalStatus::FailVerify)
-                .await;
-            Err(err)
-        })
-        .await?;
-    tx.send_device_remote_status(&device, remote).await?;
-    let disconnected = device.disconnect().await;
-    let status = match disconnected {
-        Ok(()) => DeviceLocalStatus::Disconnected,
-        Err(_) => DeviceLocalStatus::FailConnection,
-    };
-    let _ = tx.send_device_local_status(&device, status).await;
+    device.fetch_remote_status(tx).await?;
+
     Ok(())
 }
