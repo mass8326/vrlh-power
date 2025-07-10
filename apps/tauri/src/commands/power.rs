@@ -1,6 +1,6 @@
 use btleplug::platform::PeripheralId;
 use tauri::{AppHandle, Manager};
-use vrlh_power_manager_core::{DeviceCommand, DeviceLocalStatus, DeviceUpdatePayload};
+use vrlh_power_manager_core::{DeviceCommand, DeviceInfo, DeviceLocalStatus};
 
 use crate::{events::EventEmitter, AppState};
 
@@ -22,7 +22,7 @@ async fn handle_power_command(
 ) -> crate::Result<()> {
     let state = app.state::<AppState>();
     let device = state.assert_device(&id).await?;
-    let _ = app.emit_device_update(DeviceUpdatePayload::from_device_local_status(
+    let _ = app.emit_device_update(DeviceInfo::from_device_local_status(
         &device,
         DeviceLocalStatus::Initializing,
     ));
@@ -35,7 +35,7 @@ async fn handle_power_command(
     let clone = device.clone();
     let handle = tokio::spawn(async move { clone.power_set(tx, command).await });
     while let Some(remote) = rx.recv().await {
-        let payload = DeviceUpdatePayload::from_device_remote_status(&device, remote);
+        let payload = DeviceInfo::from_device_remote_status(&device, remote);
         let _ = app.emit_device_update(payload);
     }
     Ok(handle.await??)

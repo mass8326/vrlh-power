@@ -3,6 +3,7 @@ node_modules
 /build
 **/target/
 /.svelte-kit
+**/bindings/
 /package
 .env
 .env.*

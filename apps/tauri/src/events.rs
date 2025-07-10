@@ -1,6 +1,6 @@
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
-use vrlh_power_manager_core::DeviceUpdatePayload;
+use vrlh_power_manager_core::DeviceInfo;
 
 #[derive(Clone, Debug, Serialize)]
 struct StatusPayload(String);
@@ -12,12 +12,12 @@ impl StatusPayload {
 }
 
 pub trait EventEmitter {
-    fn emit_device_update(&self, payload: DeviceUpdatePayload) -> crate::Result<()>;
+    fn emit_device_update(&self, payload: DeviceInfo) -> crate::Result<()>;
     fn emit_status(&self, payload: String) -> crate::Result<()>;
 }
 
 impl EventEmitter for AppHandle {
-    fn emit_device_update(&self, payload: DeviceUpdatePayload) -> crate::Result<()> {
+    fn emit_device_update(&self, payload: DeviceInfo) -> crate::Result<()> {
         self.emit("device-update", payload).map_err(Into::into)
     }
 

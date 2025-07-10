@@ -3,6 +3,7 @@
   import { listen } from "@tauri-apps/api/event";
   import * as remeda from "remeda";
   import { onMount } from "svelte";
+  import type { DeviceInfo } from "@vrlh/core";
   import { SvelteMap } from "svelte/reactivity";
   import { slide } from "svelte/transition";
   import play from "$lib/icons/mingcute--play-fill.svg?raw";
@@ -10,28 +11,18 @@
   import stop from "$lib/icons/mingcute--stop-fill.svg?raw";
   import { status } from "$lib/status.svelte";
 
-  interface Device {
-    /** Serializes differently per platorm */
-    id: unknown;
-    /** Should be consistent across platorms */
-    addr: string;
-    name: string;
-    local?: string;
-    remote?: string;
-  }
-
   let pending = $state(true);
-  const devices = new SvelteMap<string, Device>();
+  const devices = new SvelteMap<string, DeviceInfo>();
 
   onMount(() => {
     const cleanup: (() => void)[] = [];
     void discover();
-    void listen<Device>("device-update", ({ payload }) => {
+    void listen<DeviceInfo>("device-update", ({ payload }) => {
       const existing = devices.get(payload.addr);
       devices.set(payload.addr, {
         ...payload,
-        local: payload.local ?? existing?.local,
-        remote: payload.remote ?? existing?.remote,
+        local: payload.local ?? existing?.local ?? null,
+        remote: payload.remote ?? existing?.remote ?? null,
       });
     }).then((unlisten) => cleanup.push(unlisten));
     return () => {
@@ -60,29 +51,10 @@
   const arr = $derived(
     remeda.pipe(
       [...devices.values()],
-      remeda.filter(({ local }) => local !== "IGNORED"),
+      remeda.filter(({ local }) => local !== "Ignored"),
       remeda.sortBy(remeda.prop("name")),
     ),
   );
-
-  function localizeRemoteStatus(device: Device) {
-    switch (device.remote) {
-      case "00":
-        return "STOPPED";
-      case "01":
-        return "INITIATED";
-      case "02":
-        return "STANDBY";
-      case "08":
-        return "ACKNOWLEDGED";
-      case "09":
-        return "SPINUP";
-      case "0B":
-        return "ACTIVE";
-      default:
-        return device.local ?? "[UNAVAILABLE]";
-    }
-  }
 </script>
 
 <div class="h-full flex flex-col justify-between">
@@ -103,7 +75,7 @@
     <ul class="flex flex-col gap-2">
       {#each arr as device (device.addr)}
         {@const { id, addr, name, local, remote } = device}
-        {@const disabled = local !== "DISCONNECTED"}
+        {@const disabled = local !== "Disconnected"}
         <li
           class="p-2 pl-3 flex justify-between b-(1 black) bg-neutral-800 rounded font-mono"
           transition:slide
@@ -117,13 +89,15 @@
                 <div
                   class={[
                     "h-2 w-2 rounded-full animate-pulse",
-                    local === "INITIALIZING"
+                    local === "Initializing"
                       ? "bg-yellow-800"
-                      : local === "CONNECTED"
+                      : local === "Connected"
                         ? "bg-blue-800"
                         : "bg-red-800",
                   ]}
-                  title={localizeRemoteStatus(device)}
+                  title={typeof device.local === "string"
+                    ? device.local
+                    : device.local && device.local.Error}
                 ></div>
               {/if}
             </div>
@@ -139,21 +113,21 @@
               cmd: 0,
               icon: stop,
               disabled,
-              active: remote === "00",
+              active: remote === "Stopped",
             })}
             {@render command({
               device: id,
               cmd: 2,
               icon: pause,
               disabled,
-              active: remote === "02",
+              active: remote === "Standby",
             })}
             {@render command({
               device: id,
               cmd: 1,
               icon: play,
               disabled,
-              active: remote === "0B",
+              active: remote === "Active",
             })}
           </div>
         </li>

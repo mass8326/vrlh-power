@@ -2,23 +2,25 @@ use std::fmt::{Debug, Display, Write};
 
 use async_trait::async_trait;
 use btleplug::platform::PeripheralId;
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 use tokio::sync::mpsc::{error::SendError, Sender};
+use ts_rs::TS;
 
 use crate::Device;
 
-#[derive(Clone, Debug, Serialize)]
-pub struct DeviceUpdatePayload {
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export)]
+pub struct DeviceInfo {
     /// Serializes differently per platform
+    #[ts(type = "unknown")]
     pub id: PeripheralId,
-    /// Should be consistent across platforms
     pub addr: String,
     pub name: String,
     pub local: Option<DeviceLocalStatus>,
     pub remote: Option<DeviceRemoteStatus>,
 }
 
-impl DeviceUpdatePayload {
+impl DeviceInfo {
     pub fn from_device_statuses(
         device: &Device,
         local: DeviceLocalStatus,
@@ -61,55 +63,49 @@ pub trait SendDeviceStatus {
         device: &Device,
         local: DeviceLocalStatus,
         remote: DeviceRemoteStatus,
-    ) -> Result<(), SendError<DeviceUpdatePayload>>;
+    ) -> Result<(), SendError<DeviceInfo>>;
 
     async fn send_device_local_status(
         &self,
         device: &Device,
         status: DeviceLocalStatus,
-    ) -> Result<(), SendError<DeviceUpdatePayload>>;
+    ) -> Result<(), SendError<DeviceInfo>>;
 
     async fn send_device_remote_status(
         &self,
         device: &Device,
         status: DeviceRemoteStatus,
-    ) -> Result<(), SendError<DeviceUpdatePayload>>;
+    ) -> Result<(), SendError<DeviceInfo>>;
 }
 
 #[async_trait]
-impl SendDeviceStatus for Sender<DeviceUpdatePayload> {
+impl SendDeviceStatus for Sender<DeviceInfo> {
     async fn send_device_statuses(
         &self,
         device: &Device,
         local: DeviceLocalStatus,
         remote: DeviceRemoteStatus,
-    ) -> Result<(), SendError<DeviceUpdatePayload>> {
-        self.send(DeviceUpdatePayload::from_device_statuses(
-            device, local, remote,
-        ))
-        .await
+    ) -> Result<(), SendError<DeviceInfo>> {
+        self.send(DeviceInfo::from_device_statuses(device, local, remote))
+            .await
     }
 
     async fn send_device_local_status(
         &self,
         device: &Device,
         status: DeviceLocalStatus,
-    ) -> Result<(), SendError<DeviceUpdatePayload>> {
-        self.send(DeviceUpdatePayload::from_device_local_status(
-            device, status,
-        ))
-        .await
+    ) -> Result<(), SendError<DeviceInfo>> {
+        self.send(DeviceInfo::from_device_local_status(device, status))
+            .await
     }
 
     async fn send_device_remote_status(
         &self,
         device: &Device,
         status: DeviceRemoteStatus,
-    ) -> Result<(), SendError<DeviceUpdatePayload>> {
-        self.send(DeviceUpdatePayload::from_device_remote_status(
-            device, status,
-        ))
-        .await
+    ) -> Result<(), SendError<DeviceInfo>> {
+        self.send(DeviceInfo::from_device_remote_status(device, status))
+            .await
     }
 }
 
@@ -140,7 +136,8 @@ impl Display for DeviceCommand {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, TS)]
+#[ts(export)]
 pub enum DeviceRemoteStatus {
     Stopped,
     Initiated,
@@ -172,12 +169,6 @@ impl Debug for DeviceRemoteStatus {
     }
 }
 
-impl Serialize for DeviceRemoteStatus {
-    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        serializer.serialize_str(&format!("{self:?}"))
-    }
-}
-
 impl From<Vec<u8>> for DeviceRemoteStatus {
     fn from(value: Vec<u8>) -> Self {
         if value.len() != 1 {
@@ -195,7 +186,8 @@ impl From<Vec<u8>> for DeviceRemoteStatus {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export)]
 pub enum DeviceLocalStatus {
     Initializing,
     Disconnected,
@@ -218,11 +210,5 @@ impl Display for DeviceLocalStatus {
             Self::Error(str) => str.clone(),
         };
         write!(f, "{str}")
-    }
-}
-
-impl Serialize for DeviceLocalStatus {
-    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
     }
 }

@@ -13,9 +13,7 @@ use tokio::{
     time::sleep,
 };
 
-use crate::{
-    device::Device, get_default_adapter, DeviceLocalStatus, DeviceUpdatePayload, SendDeviceStatus,
-};
+use crate::{device::Device, get_default_adapter, DeviceInfo, DeviceLocalStatus, SendDeviceStatus};
 
 /// All clones share the same reference pointers
 #[derive(Clone, Debug)]
@@ -44,7 +42,7 @@ impl DeviceList {
         self.map.clone().lock().await.get(id).cloned()
     }
 
-    pub fn start_scan(&self, duration: u64) -> crate::Result<Receiver<DeviceUpdatePayload>> {
+    pub fn start_scan(&self, duration: u64) -> crate::Result<Receiver<DeviceInfo>> {
         let (tx, rx) = channel(1);
         let devices = self.clone();
 
@@ -72,7 +70,7 @@ impl DeviceList {
 
 async fn handle_dicovered_device(
     list: DeviceList,
-    tx: Sender<DeviceUpdatePayload>,
+    tx: Sender<DeviceInfo>,
     id: PeripheralId,
 ) -> crate::Result<()> {
     if list.map.lock().await.contains_key(&id) {
@@ -93,7 +91,7 @@ async fn handle_dicovered_device(
     let Some(name) = valid_name else {
         let addr = peripheral.address().to_string();
         let _ = tx
-            .send(DeviceUpdatePayload {
+            .send(DeviceInfo {
                 id,
                 name: maybe_name.unwrap_or(format!("[{addr}]")),
                 addr,

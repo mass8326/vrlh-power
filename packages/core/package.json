@@ -1,0 +1,12 @@
+{
+  "name": "@vrlh/core",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "types": "index.d.ts",
+  "scripts": {
+    "generate": "cargo test export_bindings",
+    "check": "tsc index.d.ts"
+  }
+}
