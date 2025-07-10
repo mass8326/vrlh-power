@@ -43,7 +43,7 @@ impl Device {
     pub async fn power_set(
         &self,
         tx: Sender<DeviceRemoteStatus>,
-        command: DeviceCommand,
+        command: &DeviceCommand,
     ) -> crate::Result<()> {
         self.ensure_connected().await?;
         let characteristic = self.get_power_characteristic().await?;

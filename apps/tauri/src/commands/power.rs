@@ -1,8 +1,8 @@
 use btleplug::platform::PeripheralId;
 use tauri::{AppHandle, Manager};
-use vrlh_power_manager_core::{DeviceCommand, DeviceInfo, DeviceLocalStatus};
+use vrlh_power_manager_core::{DeviceCommand, DeviceLocalStatus};
 
-use crate::{events::EventEmitter, AppState};
+use crate::{events::EventEmitter, traits::EmitAppDeviceEvent, AppState};
 
 #[tauri::command(async)]
 pub async fn power(app: AppHandle, cmd: u8, id: PeripheralId) -> crate::Result<()> {
@@ -20,23 +20,23 @@ async fn handle_power_command(
     id: PeripheralId,
     command: DeviceCommand,
 ) -> crate::Result<()> {
-    let state = app.state::<AppState>();
-    let device = state.assert_device(&id)?;
-    let _ = app.emit_device_update(DeviceInfo::from_device_local_status(
-        &device,
-        DeviceLocalStatus::Initializing,
-    ));
+    let device = app.state::<AppState>().assert_device(&id)?;
+    let _ = DeviceLocalStatus::Initializing.emit(&app, &device).await;
     let _ = app.emit_status(format!(
         r#"Sending "{command}" command to "{}""#,
         device.name()
     ));
 
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-    let clone = device.clone();
-    let handle = tokio::spawn(async move { clone.power_set(tx, command).await });
+    let device_clone = device.clone();
+    let command_clone = command.clone();
+    let handle = tokio::spawn(async move { device_clone.power_set(tx, &command_clone).await });
+
     while let Some(remote) = rx.recv().await {
-        let payload = DeviceInfo::from_device_remote_status(&device, remote);
-        let _ = app.emit_device_update(payload);
+        let _ = remote.emit(&app, &device).await;
     }
-    Ok(handle.await??)
+
+    handle.await??;
+    let _ = app.emit_status(format!(r#"Finished "{command}" for "{}""#, device.name()));
+    Ok(())
 }

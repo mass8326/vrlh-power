@@ -109,14 +109,15 @@ impl SendDeviceStatus for Sender<DeviceInfo> {
     }
 }
 
+#[derive(Clone)]
 pub enum DeviceCommand {
     Sleep,
     Activate,
     Standby,
 }
 
-impl From<DeviceCommand> for &[u8] {
-    fn from(value: DeviceCommand) -> Self {
+impl From<&DeviceCommand> for &[u8] {
+    fn from(value: &DeviceCommand) -> Self {
         match value {
             DeviceCommand::Sleep => &[0x00],
             DeviceCommand::Activate => &[0x01],

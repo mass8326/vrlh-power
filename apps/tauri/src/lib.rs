@@ -1,6 +1,7 @@
 mod commands;
 mod error;
 mod events;
+mod traits;
 
 use std::sync::Mutex;
 
