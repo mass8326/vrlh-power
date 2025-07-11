@@ -1,6 +1,6 @@
 [package]
 name = "vrlh-power-manager"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["mass8326"]
 edition = "2021"
 
@@ -21,7 +21,7 @@ thiserror = "2.0.12"
 tokio = "1.46.1"
 btleplug = { version = "0.11.8", features = ["serde"] }
 uuid = "1.17.0"
-vrlh-power-manager-core = { version = "0.1.0", path = "../../packages/core" }
+vrlh-power-manager-core = { version = "0.2.0", path = "../../packages/core" }
 
 [lints.clippy]
 pedantic = { level = "deny", priority = -1 }

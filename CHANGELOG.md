@@ -1,4 +1,4 @@
-## Unreleased
+## Version 0.2.0 (2025-07-11)
 
 - Add ability to set lighthouses to standby
 - Add ability to send command to all devices
@@ -8,4 +8,4 @@
 
 ## Version 0.1.0 (2025-07-06)
 
-Initial release
+- Initial release
