@@ -35,6 +35,8 @@
     "eslint-plugin-unicorn": "^59.0.1",
     "globify-gitignore": "^1.0.3",
     "husky": "^9.1.7",
+    "overlayscrollbars": "^2.11.4",
+    "overlayscrollbars-svelte": "^0.5.5",
     "prettier": "^3.6.2",
     "prettier-plugin-svelte": "^3.4.0",
     "remeda": "^2.24.0",

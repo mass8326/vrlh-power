@@ -1,4 +1,6 @@
 <script lang="ts">
+  import "overlayscrollbars/overlayscrollbars.css";
+
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import * as remeda from "remeda";
@@ -11,6 +13,7 @@
   import { status } from "$lib/status.svelte";
   import Device from "./device.svelte";
   import Command from "./command.svelte";
+  import { OverlayScrollbarsComponent } from "overlayscrollbars-svelte";
 
   let pending = $state(true);
   const devices = new SvelteMap<string, DeviceInfo>();
@@ -66,36 +69,41 @@
   );
 </script>
 
-<main class="p-2 space-y-2 min-h-0 flex-1 overflow-auto">
-  <div class="flex gap-2 items-center">
-    <button
-      class={[
-        "px-4 py-2 bg-blue-900 b-(1 blue-950) rounded font-bold transition-colors",
-        "hover:(bg-blue-700 b-blue-800)",
-        "disabled:(b-black bg-neutral-900 cursor-not-allowed)",
-      ]}
-      onclick={() => discover(10)}
-      disabled={pending || undefined}
-    >
-      Refresh
-    </button>
-    <div class="flex b-(1 black) rounded divide-(x-1 black) overflow-hidden">
-      <Command onclick={createOnclick(0)} icon={stop} />
-      <Command onclick={createOnclick(2)} icon={pause} />
-      <Command onclick={createOnclick(1)} icon={play} />
+<OverlayScrollbarsComponent
+  element="main"
+  class="p-2.5 min-h-0 flex-1 overflow-auto"
+>
+  <div class="space-y-2">
+    <div class="flex gap-2 items-center">
+      <button
+        class={[
+          "px-4 py-2 bg-blue-900 b-(1 blue-950) rounded font-bold transition-colors",
+          "hover:(bg-blue-700 b-blue-800)",
+          "disabled:(b-black bg-neutral-900 cursor-not-allowed)",
+        ]}
+        onclick={() => discover(10)}
+        disabled={pending || undefined}
+      >
+        Refresh
+      </button>
+      <div class="flex b-(1 black) rounded divide-(x-1 black) overflow-hidden">
+        <Command onclick={createOnclick(0)} icon={stop} />
+        <Command onclick={createOnclick(2)} icon={pause} />
+        <Command onclick={createOnclick(1)} icon={play} />
+      </div>
     </div>
+    <ul class="flex flex-col gap-2">
+      {#each arr as device (device.addr)}
+        <Device {device} />
+      {/each}
+      {#if !pending && devices.size === 0}
+        <li class="p-4 b-(1 black) bg-neutral-800 rounded space-y-2">
+          No lighthouses found!
+        </li>
+      {/if}
+    </ul>
   </div>
-  <ul class="flex flex-col gap-2">
-    {#each arr as device (device.addr)}
-      <Device {device} />
-    {/each}
-    {#if !pending && devices.size === 0}
-      <li class="p-4 b-(1 black) bg-neutral-800 rounded space-y-2">
-        No lighthouses found!
-      </li>
-    {/if}
-  </ul>
-</main>
+</OverlayScrollbarsComponent>
 <footer class="px-4 py-1 bg-neutral-800 b-t-(1 black) font-italic">
   {status.current}
 </footer>

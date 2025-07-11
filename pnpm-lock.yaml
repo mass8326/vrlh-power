@@ -71,6 +71,12 @@ importers:
       husky:
         specifier: ^9.1.7
         version: 9.1.7
+      overlayscrollbars:
+        specifier: ^2.11.4
+        version: 2.11.4
+      overlayscrollbars-svelte:
+        specifier: ^0.5.5
+        version: 0.5.5(overlayscrollbars@2.11.4)(svelte@5.35.4)
       prettier:
         specifier: ^3.6.2
         version: 3.6.2
@@ -1703,6 +1709,15 @@ packages:
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
+
+  overlayscrollbars-svelte@0.5.5:
+    resolution: {integrity: sha512-+dRW3YZSvFbKi5vDCpnUOHuoPLLSdu0BUVVMYZdmfVghu7XkafDRebG2y91/ImPqj6YDAUsz1rcWVYhCJSS/pQ==}
+    peerDependencies:
+      overlayscrollbars: ^2.0.0
+      svelte: ^5.0.0
+
+  overlayscrollbars@2.11.4:
+    resolution: {integrity: sha512-GKYQo3OZ1QWnppNjQVv5hfpn+glYUxc6+ufW+ivdXUyLWFNc01XoH2Z36KGM4I8e5pXYeA3ElNItcXiLvmUhnQ==}
 
   own-keys@1.0.1:
     resolution: {integrity: sha512-qFOyK5PjiWZd+QQIh+1jhdb9LpxTF0qs7Pm8o5QHYZ0M3vKqSqzsZaEB6oWlxZ+q2sJBMI/Ktgd2N5ZwQoRHfg==}
@@ -3944,6 +3959,13 @@ snapshots:
       prelude-ls: 1.2.1
       type-check: 0.4.0
       word-wrap: 1.2.5
+
+  overlayscrollbars-svelte@0.5.5(overlayscrollbars@2.11.4)(svelte@5.35.4):
+    dependencies:
+      overlayscrollbars: 2.11.4
+      svelte: 5.35.4
+
+  overlayscrollbars@2.11.4: {}
 
   own-keys@1.0.1:
     dependencies:
