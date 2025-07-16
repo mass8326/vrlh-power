@@ -13,8 +13,7 @@ pub async fn discover(app: AppHandle, duration: u64) -> crate::Result<()> {
         // Initialize device list if not yet initialized
         None => {
             let init = DeviceList::init().await.inspect_err(|_| {
-                let _ =
-                    app.emit_event(StatusPayload::new("No bluetooth adapter available!".into()));
+                let _ = app.emit_event(StatusPayload::from("No bluetooth adapter available!"));
             })?;
             let mut guard = state
                 .devices
@@ -43,12 +42,12 @@ pub async fn discover(app: AppHandle, duration: u64) -> crate::Result<()> {
         }
     };
 
-    let _ = app.emit_event(StatusPayload::new("Scanning for lighthouses...".into()));
+    let _ = app.emit_event(StatusPayload::from("Scanning for lighthouses..."));
     let mut rx = devices.start_scan(duration)?;
     while let Some(payload) = rx.recv().await {
         let _ = app.emit_event(payload);
     }
 
-    let _ = app.emit_event(StatusPayload::new("Done scanning for devices!".into()));
+    let _ = app.emit_event(StatusPayload::from("Done scanning for devices!"));
     Ok(())
 }

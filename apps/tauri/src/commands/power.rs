@@ -26,7 +26,7 @@ async fn handle_power_command(
 ) -> crate::Result<()> {
     let device = app.state::<AppState>().assert_device(&id)?;
     let _ = app.emit_device(&device, DeviceLocalStatus::Initializing);
-    let _ = app.emit_event(StatusPayload::new(format!(
+    let _ = app.emit_event(StatusPayload::from(format!(
         r#"Sending "{command}" command to "{}""#,
         device.name()
     )));
@@ -41,7 +41,7 @@ async fn handle_power_command(
     }
 
     handle.await??;
-    let _ = app.emit_event(StatusPayload::new(format!(
+    let _ = app.emit_event(StatusPayload::from(format!(
         r#"Finished "{command}" for "{}""#,
         device.name()
     )));

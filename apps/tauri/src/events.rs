@@ -5,9 +5,9 @@ use vrlh_power_manager_core::DeviceInfo;
 #[derive(Clone, Debug, Serialize)]
 pub struct StatusPayload(String);
 
-impl StatusPayload {
-    pub fn new(msg: String) -> Self {
-        Self(msg)
+impl<S: Into<String>> From<S> for StatusPayload {
+    fn from(value: S) -> Self {
+        Self(value.into())
     }
 }
 
